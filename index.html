@@ -13,7 +13,7 @@ button:active{transform:translateY(1px)}
 #game{position:fixed;inset:0;background:#101b15}
 #map-viewport{position:absolute;inset:0;overflow:hidden;background:radial-gradient(circle at 50% 45%,#38533e 0,#263b2d 52%,#15231b 100%);cursor:grab}
 #map-viewport.dragging{cursor:grabbing}
-#world{position:absolute;left:0;top:0;width:2200px;height:1350px;transform-origin:0 0;user-select:none;will-change:transform}
+#world{position:absolute;left:0;top:0;width:2200px;height:2200px;transform-origin:0 0;user-select:none;will-change:transform}
 #world-inner{position:absolute;left:0;top:0;width:2200px;height:1350px;transform-origin:0 0;filter:drop-shadow(0 34px 28px rgba(0,0,0,.38));transition:none}
 .tile{cursor:pointer;transition:filter .2s}.tile polygon{stroke:rgba(20,32,23,.55);stroke-width:4;vector-effect:non-scaling-stroke}.tile:hover polygon{filter:brightness(1.12)}.tile.you polygon{fill:rgba(55,135,172,.72);stroke:#8fcfe8}.tile.north polygon{fill:rgba(154,83,77,.66);stroke:#db9c94}.tile.south polygon{fill:rgba(116,83,151,.66);stroke:#cdb5e4}.tile.neutral polygon{fill:rgba(113,124,88,.56);stroke:#aab49d}
 .terrain{opacity:.62;pointer-events:none}.tree{fill:#33573d}.tree2{fill:#456e48}.field{stroke:#c4b86e;stroke-width:5;opacity:.5}.hill{fill:#677854}.road{fill:none;stroke:#9b8860;stroke-width:12;opacity:.72;stroke-linecap:round}.river{fill:none;stroke:#4c8ca0;stroke-width:18;opacity:.88;stroke-linecap:round}
@@ -38,9 +38,9 @@ button:active{transform:translateY(1px)}
 <div id="game">
 <div id="map-viewport">
 <div id="world"><div id="world-inner">
-<svg id="svg" viewBox="0 0 2100 1200" width="2100" height="1200" xmlns="http://www.w3.org/2000/svg">
+<svg id="svg" viewBox="0 0 2200 2200" width="2200" height="2200" xmlns="http://www.w3.org/2000/svg">
 <defs><linearGradient id="ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7d9366"/><stop offset=".55" stop-color="#70855b"/><stop offset="1" stop-color="#647951"/></linearGradient></defs>
-<rect x="0" y="0" width="2100" height="1200" rx="70" fill="url(#ground)"/>
+<rect x="0" y="0" width="2200" height="2200" rx="90" fill="url(#ground)"/>
 <path class="river" d="M130 0 C210 180 120 340 250 520 S170 880 290 1200 M2070 0 C1960 180 2080 340 1950 540 S2040 900 1900 1200"/>
 <path class="road" d="M110 650 Q500 590 780 650 T1500 620 T2110 560 M600 90 Q650 300 620 500 T650 760 T600 1160"/>
 <g id="tiles"></g><g id="fx"></g><circle id="map-selection" cx="0" cy="0" r="1" fill="none"/>
@@ -61,25 +61,85 @@ const DATA=(function(){
 const COLORS={you:'#3b8bb2',north:'#9d5a53',south:'#765b96',neutral:'#727d58'};
 const ICON={Food:'🍞',Wood:'🪵',Stone:'🪨',Iron:'⚙️',Oil:'🛢️',Mana:'🔮',Gold:'🪙'};
 let selected=9,drag={active:false,sx:0,sy:0,cx:0,cz:0,moved:false},camera={x:1100,y:1.85,z:600},zoom=1,radialOpen=false,worldDays=0;
-const TILE=250,MAP_X=100,MAP_Z=100;
-function gridPoint(t){return{x:MAP_X+t.col*TILE,y:MAP_Z+t.row*TILE}}
-function polygon(t){const p=gridPoint(t);const h=TILE/2;return[[p.x+h,p.y-h],[p.x+h+h,p.y],[p.x+h,p.y+h],[p.x,p.y]]}
+const TILE=250;
+const HALF_DIAG=TILE/Math.sqrt(2);
+const GRID_CENTER={x:1100,y:1100};
+function gridPoint(t){
+  return {
+    x:GRID_CENTER.x+(t.col-t.row-2)*HALF_DIAG,
+    y:GRID_CENTER.y+(t.col+t.row-5)*HALF_DIAG
+  };
+}
+function polygon(t){
+  const p=gridPoint(t),d=HALF_DIAG;
+  return [[p.x,p.y-d],[p.x+d,p.y],[p.x,p.y+d],[p.x-d,p.y]];
+}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function makeSvg(){const g=document.getElementById('tiles');g.innerHTML=DATA.map((t,i)=>{const p=polygon(t),pts=p.map(x=>x.join(',')).join(' '),c=gridPoint(t);return `<g class="tile ${t.owner}" data-i="${i}" onclick="selectTile(${i})"><polygon points="${pts}"></polygon><g class="terrain">${terrainSvg(t,c)}</g><g class="settlement">${settlementSvg(t,c)}</g><text class="name" x="${c.x+14}" y="${c.y+28}">${esc(t.name)}</text><text class="owner" x="${c.x+14}" y="${c.y+45}">${t.owner==='you'?'YOU':t.owner.toUpperCase()} · ${t.resource}</text>${t.army?`<text class="army" x="${c.x+176}" y="${c.y+45}">⚑ ${t.army.toLocaleString()}</text>`:''}<text class="resource" x="${c.x+194}" y="${c.y+98}">${ICON[t.resource]}</text></g>`}).join('')}
-function terrainSvg(t,c){if(t.terrain==='forest'){return Array.from({length:7},(_,i)=>`<circle class="tree" cx="${c.x+42+(i%4)*45}" cy="${c.y+28+Math.floor(i/4)*38}" r="${18+(i%3)*3}"/>`).join('')};if(t.terrain==='field'){return Array.from({length:5},(_,i)=>`<path class="field" d="M${c.x+30} ${c.y+112+i*28} L${c.x+205} ${c.y+124+i*28}"/>`).join('')};if(t.terrain==='hill'){return '<ellipse class="hill" cx="'+(c.x+125)+'" cy="'+(c.y+128)+'" rx="94" ry="40"/><ellipse class="hill" cx="'+(c.x+72)+'" cy="'+(c.y+172)+'" rx="70" ry="30"/>'};return '<rect x="'+(c.x+30)+'" y="'+(c.y+100)+'" width="175" height="85" rx="20" fill="rgba(80,103,83,.24)"/>'}
-function settlementSvg(t,c){if(!t.settlement)return '';let s=t.settlement;if(s==='ruins')return '<rect x="'+(c.x+86)+'" y="'+(c.y+183)+'" width="80" height="42" class="fort"/>';let out='<rect x="'+(c.x+84)+'" y="'+(c.y+184)+'" width="72" height="38" class="building"/><path class="roof" d="M'+(c.x+76)+' '+(c.y+184)+' L'+(c.x+120)+' '+(c.y+150)+' L'+(c.x+164)+' '+(c.y+184)+'Z"/>';if(s==='fort'||s==='capital')out+='<rect x="'+(c.x+54)+'" y="'+(c.y+170)+'" width="22" height="58" class="fort"/><rect x="'+(c.x+164)+'" y="'+(c.y+170)+'" width="22" height="58" class="fort"/>';if(s==='capital')out+='<rect x="'+(c.x+116)+'" y="'+(c.y+117)+'" width="8" height="42" class="flag-you"/>';return out}
+function makeSvg(){
+ const g=document.getElementById('tiles');
+ g.innerHTML=DATA.map((t,i)=>{
+   const p=polygon(t),pts=p.map(x=>x.join(',')).join(' '),c=gridPoint(t);
+   return '<g class="tile '+t.owner+'" data-i="'+i+'" onclick="selectTile('+i+')">'+
+     '<defs><clipPath id="clip-'+i+'"><polygon points="'+pts+'"/></clipPath></defs>'+
+     '<polygon points="'+pts+'"/>'+
+     '<g clip-path="url(#clip-'+i+')" class="terrain">'+terrainSvg(t,c)+'</g>'+
+     '<g clip-path="url(#clip-'+i+')" class="settlement">'+settlementSvg(t,c)+'</g>'+
+     '<text class="name" text-anchor="middle" x="'+c.x+'" y="'+(c.y-92)+'">'+esc(t.name)+'</text>'+
+     '<text class="owner" text-anchor="middle" x="'+c.x+'" y="'+(c.y-74)+'">'+(t.owner==='you'?'YOU':t.owner.toUpperCase())+' · '+t.resource+'</text>'+
+     (t.army?'<text class="army" text-anchor="middle" x="'+c.x+'" y="'+(c.y+105)+'">⚑ '+t.army.toLocaleString()+'</text>':'')+
+     '<text class="resource" text-anchor="middle" x="'+c.x+'" y="'+(c.y+60)+'">'+ICON[t.resource]+'</text>'+
+   '</g>';
+ }).join('');
+}
+function terrainSvg(t,c){
+ if(t.terrain==='forest'){
+   return Array.from({length:8},(_,i)=>{
+     const x=c.x-78+(i%4)*52,y=c.y+8+Math.floor(i/4)*48;
+     return '<circle class="tree" cx="'+x+'" cy="'+y+'" r="'+(15+(i%3)*2)+'"/>';
+   }).join('');
+ }
+ if(t.terrain==='field'){
+   return Array.from({length:6},(_,i)=>
+     '<path class="field" d="M'+(c.x-88)+' '+(c.y-34+i*27)+' L'+(c.x+88)+' '+(c.y-12+i*27)+'"/>'
+   ).join('');
+ }
+ if(t.terrain==='hill'){
+   return '<ellipse class="hill" cx="'+(c.x-24)+'" cy="'+(c.y+8)+'" rx="62" ry="31"/>'+
+          '<ellipse class="hill" cx="'+(c.x+48)+'" cy="'+(c.y+34)+'" rx="55" ry="28"/>';
+ }
+ return '<ellipse cx="'+c.x+'" cy="'+(c.y+25)+'" rx="82" ry="38" fill="rgba(80,103,83,.22)"/>';
+}
+function settlementSvg(t,c){
+ if(!t.settlement)return '';
+ if(t.settlement==='ruins')
+   return '<rect x="'+(c.x-34)+'" y="'+(c.y+30)+'" width="68" height="34" class="fort"/>';
+ let out='<rect x="'+(c.x-30)+'" y="'+(c.y+18)+'" width="60" height="35" class="building"/>'+
+         '<path class="roof" d="M'+(c.x-38)+' '+(c.y+18)+' L'+c.x+' '+(c.y-10)+' L'+(c.x+38)+' '+(c.y+18)+'Z"/>';
+ if(t.settlement==='fort'||t.settlement==='capital'){
+   out+='<rect x="'+(c.x-56)+'" y="'+(c.y+8)+'" width="18" height="54" class="fort"/>'+
+        '<rect x="'+(c.x+38)+'" y="'+(c.y+8)+'" width="18" height="54" class="fort"/>';
+ }
+ if(t.settlement==='capital')
+   out+='<rect x="'+(c.x-3)+'" y="'+(c.y-48)+'" width="6" height="38" class="flag-you"/>';
+ if(t.settlement==='village'){
+   out+='<rect x="'+(c.x-70)+'" y="'+(c.y+27)+'" width="22" height="22" class="building"/>'+
+        '<path class="roof" d="M'+(c.x-75)+' '+(c.y+27)+' L'+(c.x-59)+' '+(c.y+12)+' L'+(c.x-43)+' '+(c.y+27)+'Z"/>'+
+        '<rect x="'+(c.x+48)+'" y="'+(c.y+31)+'" width="22" height="20" class="building"/>';
+ }
+ return out;
+}
 function renderResources(){const vals={Food:5000,Wood:3500,Stone:2200,Iron:900,Oil:200,Mana:80,Gold:800};document.getElementById('resources').innerHTML=Object.entries(vals).map(([k,v])=>`<button class="res glass" onclick="openResource('${k}')"><span>${ICON[k]}</span><b>${v.toLocaleString()}</b><small>/${k==='Gold'?'3000':k==='Mana'?'500':k==='Oil'?'2000':k==='Stone'?'8000':'10000'}</small></button>`).join('')}
 function selectTile(i){selected=i;closePanel();radialOpen=true;updateSelection();pulse();buildRadial();document.getElementById('map-selection').classList.remove('active');void document.getElementById('map-selection').offsetWidth;document.getElementById('map-selection').classList.add('active')}
 function updateSelection(){const t=DATA[selected],c=gridPoint(t);document.querySelectorAll('.tile.selected').forEach(e=>e.classList.remove('selected'));const el=document.querySelector('.tile[data-i="'+selected+'"]');if(el)el.classList.add('selected');document.getElementById('sel-name').textContent=t.name;document.getElementById('sel-meta').textContent=(t.owner==='you'?'You':t.owner==='neutral'?'Neutral':t.owner)+' · '+t.resource}
 function buildRadial(){const r=document.getElementById('radial');r.innerHTML='';const actions=actionsFor(DATA[selected]);actions.forEach((a,i)=>{const b=document.createElement('button');b.className='radial-btn';b.innerHTML='<span>'+a.glyph+'</span><span>'+a.label+'</span>';b.type='button';b.onpointerdown=e=>e.stopPropagation();b.onclick=e=>{e.stopPropagation();doAction(a.id)};r.appendChild(b)});const vp=document.getElementById('map-viewport').getBoundingClientRect(),el=document.querySelector('.tile[data-i="'+selected+'"] polygon');if(!el)return;const bb=el.getBoundingClientRect(),cx=bb.left-vp.left+bb.width/2,cy=bb.top-vp.top+bb.height/2;const radius=Math.min(165,Math.max(115,Math.min(vp.width,vp.height)*.16));[...r.querySelectorAll('.radial-btn')].forEach((b,i)=>{const angle=-Math.PI/2+i*(Math.PI*2/actions.length);const x=cx+Math.cos(angle)*radius,y=cy+Math.sin(angle)*radius;b.style.left=x+'px';b.style.top=y+'px';requestAnimationFrame(()=>b.classList.add('show'));const line=document.createElement('div');line.className='radial-line';line.style.left=cx+'px';line.style.top=cy+'px';line.style.width=radius+'px';line.style.transform='rotate('+angle+'rad)';r.appendChild(line);setTimeout(()=>line.style.opacity='.65',40)});r.classList.add('open')}
 function actionsFor(t){const enemy=!['you','neutral'].includes(t.owner);return[{id:'details',label:'Details',glyph:'i'},{id:t.owner==='you'?'build':'scout',label:t.owner==='you'?'Build':'Scout',glyph:t.owner==='you'?'+':'◎'},{id:enemy?'attack':'move',label:enemy?'Attack':'Move',glyph:enemy?'⚔':'↗'},{id:t.owner==='you'?'army':'claim',label:t.owner==='you'?'Army':'Claim',glyph:t.owner==='you'?'⚑':'◆'},{id:'relations',label:'Relations',glyph:'◌'},{id:'view',label:'View',glyph:'◉'}]}
 function doAction(id){const t=DATA[selected];if(id==='view'){toast('Map view');return}if(id==='claim'){if(t.owner==='neutral'){t.owner='you';toast('Territory claimed');makeSvg();updateSelection();buildRadial()}else toast('Cannot claim this territory');return}if(id==='scout'){toast('Scout report ready');openPanel('details');return}if(id==='attack'){toast('Army action prepared');openPanel('army');return}if(id==='build'){toast('Build controls opened');openPanel('settlement');return}if(id==='details'){openPanel('details');return}if(id==='army'){openPanel('army');return}if(id==='relations'){openPanel('relations')}}
-function pulse(){const p=document.getElementById('map-selection');const c=gridPoint(DATA[selected]);p.setAttribute('cx',c.x+125);p.setAttribute('cy',c.y+145);p.classList.remove('active');void p.offsetWidth;p.classList.add('active')}
+function pulse(){const p=document.getElementById('map-selection');const c=gridPoint(DATA[selected]);p.setAttribute('cx',c.x);p.setAttribute('cy',c.y);p.classList.remove('active');void p.offsetWidth;p.classList.add('active')}
 function closePanel(){const p=document.getElementById('panel');p.classList.remove('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open')}
 function openPanel(kind){const t=DATA[selected],p=document.getElementById('panel');let html='';if(kind==='details')html='<div class="panel-head"><div><h3>'+t.name+'</h3><div class="muted">'+t.resource+' · '+(t.owner==='you'?'You':t.owner==='neutral'?'Neutral':t.owner)+'</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+t.resource+'</b><small>Resource</small></div><div class="kv"><b>'+(t.settlement||'None')+'</b><small>Settlement</small></div><div class="kv"><b>'+(t.army?t.army.toLocaleString():'None')+'</b><small>Army</small></div><div class="kv"><b>'+(((t.col>0||t.row>0))?'Connected':'Edge')+'</b><small>Position</small></div></div>';else if(kind==='settlement')html='<div class="panel-head"><div><h3>Settlement</h3><div class="muted">Development stays visible on the world.</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>420 / 500</b><small>Population</small></div><div class="kv"><b>3</b><small>Farms</small></div><div class="kv"><b>2</b><small>Lumber Mills</small></div><div class="kv"><b>1</b><small>Quarry</small></div></div><div class="panel-actions"><button onclick="doAction(\'build\')">Build House</button></div>';else if(kind==='army')html='<div class="panel-head"><div><h3>Army</h3><div class="muted">1,?00 total units · 40 wounded</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>120</b><small>Militia</small></div><div class="kv"><b>80</b><small>Spearmen</small></div><div class="kv"><b>70</b><small>Archers</small></div><div class="kv"><b>40</b><small>Other</small></div></div>';else if(kind==='portal')html='<div class="panel-head"><div><h3>Portal</h3><div class="muted">PvE encounter</div></div><button onclick="closePanel()">×</button></div><div class="kv"><b>Closed</b><small>Open a portal to fight outside the main world.</small></div><div class="panel-actions"><button onclick="toast(\'Portal opened\')">Open Portal</button></div>';else if(kind==='log')html='<div class="panel-head"><div><h3>Log</h3><div class="muted">Recent world events</div></div><button onclick="closePanel()">×</button></div><div class="kv"><small>No recent events.</small></div>';else if(kind==='settings')html='<div class="panel-head"><div><h3>Settings</h3><div class="muted">Map controls</div></div><button onclick="closePanel()">×</button></div><div class="panel-actions"><button onclick="resetView()">Center Map</button></div>';else if(kind==='relations')html='<div class="panel-head"><div><h3>Relations</h3><div class="muted">Diplomacy for '+t.name+'</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+(t.owner==='neutral'?'Neutral':'Known')+'</b><small>Current relation</small></div><div class="kv"><b>'+t.owner.toUpperCase()+'</b><small>Control</small></div></div>';p.innerHTML=html;p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open')}
 function openResource(k){toast(k+' selected')}
 function toast(s){const d=document.getElementById('toast');d.textContent=s;d.classList.add('open');clearTimeout(toast._t);toast._t=setTimeout(()=>d.classList.remove('open'),1400)}
-function resetView(){camera.x=1100;camera.z=600;zoom=1;applyView();if(radialOpen)buildRadial();toast('Map centered')}
+function resetView(){camera.x=1100;camera.z=1100;zoom=1;applyView();if(radialOpen)buildRadial();toast('Map centered')}
 function applyView(){
   const w=document.getElementById('world');
   const viewport=document.getElementById('map-viewport');
