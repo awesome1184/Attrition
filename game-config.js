@@ -4,12 +4,11 @@
   'use strict';
 
   window.AttritionGameConfig = {
-    version: 1,
+    version: 2,
     season: {
-      number: 1,
       start: '2026-07-01T00:00:00Z',
       lengthHours: 180 * 24,
-      worldSeed: 'attrition-season-1'
+      worldSeedPrefix: 'attrition-season-'
     },
     simulation: {
       hoursPerTick: 1,
