@@ -241,7 +241,7 @@
       armies: []
     };
     const playerArmy = nearest(territories, start.col, start.row, 'you', 1)[0];
-    const playerSecond = nearest(territories, start.col + 1, start.row, 'you', 1)[0];
+    const playerSecond = nearest(territories, start.col + 1, start.row, 'you', 3).find(t => !playerArmy || t.id !== playerArmy.id);
     const candidates = [
       { owner: 'you', territoryId: (playerArmy || capital).id, kind: 'field' },
       { owner: 'you', territoryId: (playerSecond || capital).id, kind: 'fort' },
