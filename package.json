@@ -1,0 +1,14 @@
+{
+  "name": "attrition",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Attrition MMO strategy game and authoritative game server",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "check": "node --check server/server.js && node --check server/game-engine.js && node --check multiplayer.js && node --check map-generator.js && node --check game-config.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
