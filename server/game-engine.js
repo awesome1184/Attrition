@@ -437,7 +437,7 @@ class GameEngine{
   tickReports(){
     Object.entries(this.state.reports).forEach(([pid,reports])=>Object.entries(reports).forEach(([id,r)=>{
       if(r.readyTick===this.state.tick)this.addEvent('Scout report for '+(this.territory(id)?.name||'territory')+' arrived.',pid);
-    })));
+    }));
   }
   tick(){
     this.state.tick++;this.state.seasonHour=(this.state.seasonHour||0)+1;this.state.hour++;
