@@ -15,7 +15,7 @@
     if(token)headers.Authorization='Bearer '+token;
     const res=await fetch(BASE_URL+path,Object.assign({},options,{headers}));
     let body={};try{body=await res.json();}catch(_){}
-    if(!res.ok)throw new Error(body.error||body.result?.message||('Request failed: '+res.status));
+    if(!res.ok){const error=new Error(body.error||body.result?.message||('Request failed: '+res.status));error.status=res.status;throw error;}
     return body;
   }
   function hydrate(body){
@@ -24,14 +24,29 @@
     window.dispatchEvent(new CustomEvent('attrition-state',{detail:snapshot}));
     return snapshot;
   }
+  async function createOrRestoreSession(){
+    const saved=localStorage.getItem(TOKEN_KEY);
+    const body=await request('/api/session',{method:'POST',body:JSON.stringify(saved?{token:saved}:{})});
+    localStorage.setItem(TOKEN_KEY,body.token);hydrate(body.state);booted=true;return body;
+  }
   async function sync(){
-    const body=await request('/api/state');
-    const oldSeason=snapshot?.season?.number;hydrate(body);
+    const oldSeason=snapshot?.season?.number;
+    try{
+      const body=await request('/api/state');hydrate(body);
+    }catch(err){
+      if(err.status!==401)throw err;
+      localStorage.removeItem(TOKEN_KEY);await createOrRestoreSession();
+    }
     return {seasonChanged:oldSeason!==undefined&&oldSeason!==snapshot.season.number,processed:0};
   }
   async function action(name,args){
-    const body=await request('/api/action',{method:'POST',body:JSON.stringify({action:name,args})});
-    hydrate(body.state);return body.result;
+    try{
+      const body=await request('/api/action',{method:'POST',body:JSON.stringify({action:name,args})});
+      hydrate(body.state);return body.result;
+    }catch(err){
+      if(err.status===401){localStorage.removeItem(TOKEN_KEY);await createOrRestoreSession();return {ok:false,message:'Your session was refreshed.'};}
+      return {ok:false,message:err.message};
+    }
   }
   function mapView(){return snapshot?.map||BASE.mapView();}
   function getState(){
@@ -73,10 +88,8 @@
   };
   window.AttritionSimulation=API;
   window.AttritionMultiplayerReady=(async function(){
-    const saved=localStorage.getItem(TOKEN_KEY);
     try{
-      const body=await request('/api/session',{method:'POST',body:JSON.stringify(saved?{token:saved}:{})});
-      localStorage.setItem(TOKEN_KEY,body.token);hydrate(body.state);booted=true;
+      await createOrRestoreSession();
     }catch(err){
       console.warn('Attrition server unavailable:',err.message);online=false;window.AttritionOnline={online:false,error:err.message};
     }
