@@ -32,3 +32,25 @@ Dragging pans the map and the mouse wheel changes its scale. Resource controls, 
 ## Implementation note
 
 The main interface no longer depends on the canvas renderer loading successfully. This is intentional: a browser-side rendering exception should not turn the entire game into a blank page. The SVG map provides the core interface, while the older `world-map.js` renderer can evolve independently.
+## Simulation
+
+The map is backed by `simulation.js`, which owns the game state. `index.html` reads that state and renders it.
+
+`simulation.js` currently provides:
+
+- hourly world ticks with persistent browser save state
+- Food, Wood, Stone, Iron, Oil, Mana, and Gold production with storage caps
+- population growth, food upkeep, shortages, and morale pressure
+- building construction queues for farms, mills, quarries, mines, oil wells, mana extractors, markets, barracks, workshops, and forts
+- armies with unit composition, morale, supplies, recruitment, movement, and orders
+- combat resolved over multiple ticks with terrain and fortification effects plus element interactions (`fire`, `gun`, `antitank`)
+- territory claims and occupation
+- delayed scouting reports for enemy territory
+- faction relations and Gold-funded diplomacy changes
+- temporary PvE portals with AI territory and rewards
+
+## Simulation boundary
+
+`map-data.js` describes the initial world. `simulation.js` turns that data into mutable state. `index.html` does not own economy, combat, or diplomacy rules. This separation is intentional so procedural maps and alternate renderers can use the same simulation later.
+
+One real-world 20-second interval advances one game hour in the prototype. The Settings panel also exposes a manual one-hour advance control for testing.
