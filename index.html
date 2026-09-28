@@ -340,7 +340,7 @@ function resetSeason(){SIM.reset();openKind=null;refreshGame();toast('State rese
 function openResource(k){
  const s=SIM.getState(),income=SIM.getIncome(),upkeep=k==='Food'?SIM.getFoodUpkeep():0,p=document.getElementById('panel');activeResource=k;openKind='resource';
  p.innerHTML='<div class="panel-head"><div><h3>'+resourceLabel(k)+'</h3><div class="muted">Economy</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+Math.floor(s.resources[k]).toLocaleString()+'</b><small>Stored</small></div><div class="kv"><b>+'+Math.round(income[k]||0)+'/h</b><small>Production</small></div>'+(k==='Food'?'<div class="kv"><b>-'+Math.round(upkeep)+'/h</b><small>Population + army upkeep</small></div>':'')+'<div class="kv"><b>'+SIM.RESOURCE_INFO[k].cap.toLocaleString()+'</b><small>Storage cap</small></div></div>';
- p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
+ decoratePanelTooltips('resource');p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
 }
 function toast(s){const d=document.getElementById('toast');d.textContent=s;d.classList.add('open');clearTimeout(toast._t);toast._t=setTimeout(()=>d.classList.remove('open'),1800)}
 function resetView(){camera.x=1100;camera.z=1100;zoom=1;applyView();if(radialOpen)buildRadial();toast('Map centered')}
