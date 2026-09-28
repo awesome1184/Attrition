@@ -792,6 +792,7 @@
     scout,
     improveRelation,
     openPortal,
+    portalAttack,
     closePortal,
     tick,
     reset,
