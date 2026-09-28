@@ -3,7 +3,7 @@
   'use strict';
 
   const MAP = window.AttritionMapData;
-  const STORAGE_KEY = 'attrition-state-v2';
+  const STORAGE_KEY = 'attrition-state-v3';
 
   const RESOURCE_KEYS = ['Food', 'Wood', 'Stone', 'Iron', 'Oil', 'Mana', 'Gold'];
 
@@ -217,12 +217,14 @@
     });
 
     return {
-      version: 2,
+      version: 3,
       mapSeed: MAP.seed,
-      tick: 0,
+      tick: MAP.seasonElapsedHours || 0,
+      lastWallClockMs: Date.now(),
+      seasonHour: MAP.seasonElapsedHours || 0,
       year: 1,
-      day: 1,
-      hour: 0,
+      day: 1 + Math.floor((MAP.seasonElapsedHours || 0) / 24),
+      hour: (MAP.seasonElapsedHours || 0) % 24,
       resources: { Food: 5000, Wood: 3500, Stone: 2200, Iron: 900, Oil: 200, Mana: 80, Gold: 800 },
       population: 420,
       populationCap: 500,
@@ -241,7 +243,7 @@
         { tick: 0, text: 'The season has started.' },
         { tick: 0, text: 'Your capital is ready.' }
       ],
-      season: { number: 1, tickLengthHours: 1 }
+      season: { number: MAP.seasonNumber, start: MAP.seasonStart, lengthHours: window.AttritionGameConfig.season.lengthHours, tickLengthHours: 1 }
     };
   }
 
@@ -250,7 +252,7 @@
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return initialState();
       const state = JSON.parse(saved);
-      if (!state || state.version !== 2 || state.mapSeed !== MAP.seed || state.territories?.length !== MAP.territories.length) return initialState();
+      if (!state || state.version !== 3 || state.mapSeed !== MAP.seed || state.season?.number !== MAP.seasonNumber || state.territories?.length !== MAP.territories.length) return initialState();
       return state;
     } catch (_) {
       return initialState();
@@ -259,6 +261,7 @@
 
   let state = load();
   if (!state || !state.territories || !state.armies) state = initialState();
+  if (!Number.isFinite(state.lastWallClockMs)) state.lastWallClockMs = Date.now();
 
   function save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
@@ -733,15 +736,13 @@
 
   function tick() {
     state.tick += 1;
+    state.seasonHour = (state.seasonHour || 0) + 1;
     state.hour += 1;
     if (state.hour >= 24) {
       state.hour = 0;
       state.day += 1;
-      if (state.day > 30) {
-        state.day = 1;
-        state.year += 1;
-      }
     }
+    state.lastWallClockMs = Date.now();
 
     tickConstruction();
     tickProduction();
@@ -756,6 +757,33 @@
     });
 
     save();
+  }
+
+  function syncToClock(now = Date.now()) {
+    const last = Number(state.lastWallClockMs || now);
+    const elapsedHours = Math.floor(Math.max(0, now - last) / 3600000);
+    if (elapsedHours <= 0) return 0;
+
+    let processed = 0;
+    const maxHours = Math.min(elapsedHours, window.AttritionGameConfig.season.lengthHours - (state.seasonHour || 0));
+    while (processed < maxHours) {
+      tick();
+      processed += 1;
+    }
+    state.lastWallClockMs = last + processed * 3600000;
+    save();
+    return processed;
+  }
+
+  function seasonProgress(now = Date.now()) {
+    const start = Date.parse(state.season.start);
+    const hours = Math.max(0, Math.floor((now - start) / 3600000));
+    return {
+      season: state.season.number,
+      elapsedHours: Math.min(hours, state.season.lengthHours),
+      remainingHours: Math.max(0, state.season.lengthHours - hours),
+      remainingDays: Math.max(0, Math.ceil((state.season.lengthHours - hours) / 24))
+    };
   }
 
   function reset() {
@@ -774,7 +802,7 @@
   function getFoodUpkeep() { return foodUpkeep(); }
   function getVisibleArmy(id) { return visibleArmy(id); }
   function getPortal() { return state.portals.find(p => p.status === 'open') || null; }
-  function formatTime() { return 'YEAR ' + state.year + ' · DAY ' + state.day + ' · ' + String(state.hour).padStart(2,'0') + ':00'; }
+  function formatTime() { return 'SEASON ' + state.season.number + ' · DAY ' + state.day + ' · ' + String(state.hour).padStart(2,'0') + ':00'; }
 
   window.AttritionSimulation = {
     RESOURCE_INFO,
@@ -804,7 +832,8 @@
     portalAttack,
     closePortal,
     tick,
-    reset,
+    syncToClock,
+    seasonProgress,
     save
   };
 })();
