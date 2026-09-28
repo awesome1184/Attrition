@@ -13,7 +13,7 @@ button:active{transform:translateY(1px)}
 #game{position:fixed;inset:0;background:#101b15}
 #map-viewport{position:absolute;inset:0;overflow:hidden;background:radial-gradient(circle at 50% 45%,#38533e 0,#263b2d 52%,#15231b 100%);cursor:grab}
 #map-viewport.dragging{cursor:grabbing}
-#world{position:absolute;left:0;top:0;width:2200px;height:1350px;transform-origin:0 0;user-select:none}
+#world{position:absolute;left:0;top:0;width:2200px;height:1350px;transform-origin:0 0;user-select:none;will-change:transform}
 #world-inner{position:absolute;left:0;top:0;width:2200px;height:1350px;transform-origin:0 0;filter:drop-shadow(0 34px 28px rgba(0,0,0,.38));transition:none}
 .tile{cursor:pointer;transition:filter .2s}.tile polygon{stroke:rgba(20,32,23,.55);stroke-width:4;vector-effect:non-scaling-stroke}.tile:hover polygon{filter:brightness(1.12)}.tile.you polygon{fill:rgba(55,135,172,.72);stroke:#8fcfe8}.tile.north polygon{fill:rgba(154,83,77,.66);stroke:#db9c94}.tile.south polygon{fill:rgba(116,83,151,.66);stroke:#cdb5e4}.tile.neutral polygon{fill:rgba(113,124,88,.56);stroke:#aab49d}
 .terrain{opacity:.62;pointer-events:none}.tree{fill:#33573d}.tree2{fill:#456e48}.field{stroke:#c4b86e;stroke-width:5;opacity:.5}.hill{fill:#677854}.road{fill:none;stroke:#9b8860;stroke-width:12;opacity:.72;stroke-linecap:round}.river{fill:none;stroke:#4c8ca0;stroke-width:18;opacity:.88;stroke-linecap:round}
@@ -60,7 +60,7 @@ const DATA=(function(){
 })();
 const COLORS={you:'#3b8bb2',north:'#9d5a53',south:'#765b96',neutral:'#727d58'};
 const ICON={Food:'🍞',Wood:'🪵',Stone:'🪨',Iron:'⚙️',Oil:'🛢️',Mana:'🔮',Gold:'🪙'};
-let selected=9,drag={active:false,sx:0,sy:0,px:0,pz:0},camera={x:0,y:1.85,z:0},zoom=1,radialOpen=false,worldDays=0;
+let selected=9,drag={active:false,sx:0,sy:0,cx:0,cz:0,moved:false},camera={x:1100,y:1.85,z:675},zoom=1,radialOpen=false,worldDays=0;
 function gridPoint(t){const x=90+t.col*250,y=90+t.row*290;return{x,y}}
 function polygon(t){const p=gridPoint(t);return[[p.x,p.y+18],[p.x+236,p.y],[p.x+250,p.y+272],[p.x+12,p.y+290]]}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -78,15 +78,76 @@ function closePanel(){const p=document.getElementById('panel');p.classList.remov
 function openPanel(kind){const t=DATA[selected],p=document.getElementById('panel');let html='';if(kind==='details')html='<div class="panel-head"><div><h3>'+t.name+'</h3><div class="muted">'+t.resource+' · '+(t.owner==='you'?'You':t.owner==='neutral'?'Neutral':t.owner)+'</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+t.resource+'</b><small>Resource</small></div><div class="kv"><b>'+(t.settlement||'None')+'</b><small>Settlement</small></div><div class="kv"><b>'+(t.army?t.army.toLocaleString():'None')+'</b><small>Army</small></div><div class="kv"><b>'+(((t.col>0||t.row>0))?'Connected':'Edge')+'</b><small>Position</small></div></div>';else if(kind==='settlement')html='<div class="panel-head"><div><h3>Settlement</h3><div class="muted">Development stays visible on the world.</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>420 / 500</b><small>Population</small></div><div class="kv"><b>3</b><small>Farms</small></div><div class="kv"><b>2</b><small>Lumber Mills</small></div><div class="kv"><b>1</b><small>Quarry</small></div></div><div class="panel-actions"><button onclick="doAction(\'build\')">Build House</button></div>';else if(kind==='army')html='<div class="panel-head"><div><h3>Army</h3><div class="muted">1,?00 total units · 40 wounded</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>120</b><small>Militia</small></div><div class="kv"><b>80</b><small>Spearmen</small></div><div class="kv"><b>70</b><small>Archers</small></div><div class="kv"><b>40</b><small>Other</small></div></div>';else if(kind==='portal')html='<div class="panel-head"><div><h3>Portal</h3><div class="muted">PvE encounter</div></div><button onclick="closePanel()">×</button></div><div class="kv"><b>Closed</b><small>Open a portal to fight outside the main world.</small></div><div class="panel-actions"><button onclick="toast(\'Portal opened\')">Open Portal</button></div>';else if(kind==='log')html='<div class="panel-head"><div><h3>Log</h3><div class="muted">Recent world events</div></div><button onclick="closePanel()">×</button></div><div class="kv"><small>No recent events.</small></div>';else if(kind==='settings')html='<div class="panel-head"><div><h3>Settings</h3><div class="muted">Map controls</div></div><button onclick="closePanel()">×</button></div><div class="panel-actions"><button onclick="resetView()">Center Map</button></div>';else if(kind==='relations')html='<div class="panel-head"><div><h3>Relations</h3><div class="muted">Diplomacy for '+t.name+'</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+(t.owner==='neutral'?'Neutral':'Known')+'</b><small>Current relation</small></div><div class="kv"><b>'+t.owner.toUpperCase()+'</b><small>Control</small></div></div>';p.innerHTML=html;p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open')}
 function openResource(k){toast(k+' selected')}
 function toast(s){const d=document.getElementById('toast');d.textContent=s;d.classList.add('open');clearTimeout(toast._t);toast._t=setTimeout(()=>d.classList.remove('open'),1400)}
-function resetView(){camera.x=0;camera.z=0;zoom=1;applyView();if(radialOpen)buildRadial();toast('Map centered')}
-function applyView(){const w=document.getElementById('world');const inner=document.getElementById('world-inner');const sx=0.92,sy=0.58,skx=-0.28;const x=(window.innerWidth-2200*sx*zoom)/2-camera.x;const z=(window.innerHeight-1350*sy*zoom)/2-camera.z;w.style.transform='translate('+x+'px,'+z+'px) scale('+zoom+')';inner.style.transform='matrix('+sx+',0,'+skx+','+sy+',0,0)';}
-async function reloadAndClearCache(){try{if(window.caches){const keys=await caches.keys();await Promise.all(keys.map(k=>caches.delete(k)));}}catch(_){}location.replace(location.pathname+'?reload='+Date.now())}
+function resetView(){camera.x=1100;camera.z=675;zoom=1;applyView();if(radialOpen)buildRadial();toast('Map centered')}
+function applyView(){
+  const w=document.getElementById('world');
+  const viewport=document.getElementById('map-viewport');
+  const vw=viewport.clientWidth||window.innerWidth;
+  const vh=viewport.clientHeight||window.innerHeight;
+  const ax=0.8660254038,ay=0.5,az=-0.8660254038,bz=0.5;
+  const tx=vw/2-zoom*(ax*camera.x+az*camera.z);
+  const ty=vh/2-zoom*(ay*camera.x+bz*camera.z);
+  w.style.transform='matrix('+(ax*zoom)+','+(ay*zoom)+','+(az*zoom)+','+(bz*zoom)+','+tx+','+ty+')';
+}
+async function reloadAndClearCache(){
+  try{
+    if(window.caches){
+      const keys=await caches.keys();
+      await Promise.all(keys.map(k=>caches.delete(k)));
+    }
+  }catch(_){}
+  location.replace(location.pathname+'?reload='+Date.now());
+}
+function tileFromPoint(clientX,clientY){
+  const el=document.elementFromPoint(clientX,clientY);
+  const tile=el&&el.closest?el.closest('.tile'):null;
+  return tile?Number(tile.getAttribute('data-i')):null;
+}
+function handleMapPointerDown(e){
+  if(e.button!==0||e.target.closest('.radial-btn'))return;
+  drag={active:true,sx:e.clientX,sy:e.clientY,cx:camera.x,cz:camera.z,moved:false};
+  document.getElementById('map-viewport').classList.add('dragging');
+}
+function handleMapPointerMove(e){
+  if(!drag.active)return;
+  const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
+  if(Math.hypot(dx,dy)>5)drag.moved=true;
+  const ax=0.8660254038,ay=0.5,az=-0.8660254038,bz=0.5;
+  const det=ax*bz-az*ay;
+  const sx=dx/zoom,sy=dy/zoom;
+  const worldDx=(bz*sx-az*sy)/det;
+  const worldDz=(-ay*sx+ax*sy)/det;
+  camera.x=drag.cx-worldDx;
+  camera.z=drag.cz-worldDz;
+  applyView();
+  if(radialOpen)buildRadial();
+}
+function handleMapPointerUp(e){
+  if(!drag.active)return;
+  const moved=drag.moved;
+  drag.active=false;
+  document.getElementById('map-viewport').classList.remove('dragging');
+  if(!moved){
+    const hit=tileFromPoint(e.clientX,e.clientY);
+    if(hit!==null)selectTile(hit);
+  }
+}
+function handleMapPointerCancel(){
+  drag.active=false;
+  document.getElementById('map-viewport').classList.remove('dragging');
+}
 const vp=document.getElementById('map-viewport');
-vp.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('.radial-btn'))return;drag={active:true,sx:e.clientX,sy:e.clientY,px:camera.x,pz:camera.z};vp.classList.add('dragging');vp.setPointerCapture(e.pointerId)});
-vp.addEventListener('pointermove',e=>{if(!drag.active)return;camera.x=drag.px-(e.clientX-drag.sx);camera.z=drag.pz-(e.clientY-drag.sy);applyView();if(radialOpen)buildRadial()});
-vp.addEventListener('pointerup',e=>{if(!drag.active)return;drag.active=false;vp.classList.remove('dragging');try{vp.releasePointerCapture(e.pointerId)}catch(_){}});
-vp.addEventListener('pointercancel',()=>{drag.active=false;vp.classList.remove('dragging')});
-vp.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.72,Math.min(1.35,zoom*(e.deltaY<0?1.08:.93)));applyView();if(radialOpen)buildRadial()},{passive:false});window.addEventListener('resize',()=>{applyView();if(radialOpen)buildRadial()});
+vp.addEventListener('pointerdown',handleMapPointerDown);
+vp.addEventListener('pointermove',handleMapPointerMove);
+vp.addEventListener('pointerup',handleMapPointerUp);
+vp.addEventListener('pointercancel',handleMapPointerCancel);
+vp.addEventListener('wheel',e=>{
+  e.preventDefault();
+  zoom=Math.max(.72,Math.min(1.35,zoom*(e.deltaY<0?1.08:.93)));
+  applyView();
+  if(radialOpen)buildRadial();
+},{passive:false});
+window.addEventListener('resize',()=>{applyView();if(radialOpen)buildRadial()});
 makeSvg();renderResources();updateSelection();applyView();setInterval(()=>{worldDays=(worldDays+10)%1440;const h=String(Math.floor(worldDays/60)).padStart(2,'0'),m=String(worldDays%60).padStart(2,'0');document.getElementById('clock').textContent='YEAR 1 · DAY 1 · '+h+':'+m},600000);
 </script>
 </body></html>
