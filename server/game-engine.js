@@ -435,7 +435,7 @@ class GameEngine{
     if(sumUnits(def.units)<=0)delete this.state.armies[def.id];
   }
   tickReports(){
-    Object.entries(this.state.reports).forEach(([pid,reports])=>Object.entries(reports).forEach(([id,r)=>{
+    Object.entries(this.state.reports).forEach(([pid,reports])=>Object.entries(reports).forEach(([id,r])=>{
       if(r.readyTick===this.state.tick)this.addEvent('Scout report for '+(this.territory(id)?.name||'territory')+' arrived.',pid);
     }));
   }
