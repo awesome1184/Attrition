@@ -14,7 +14,7 @@ button:active{transform:translateY(1px)}
 #map-viewport{position:absolute;inset:0;overflow:hidden;background:radial-gradient(circle at 50% 45%,#38533e 0,#263b2d 52%,#15231b 100%);cursor:grab}
 #map-viewport.dragging{cursor:grabbing}
 #world{position:absolute;left:0;top:0;width:2200px;height:2200px;transform-origin:0 0;user-select:none;will-change:transform}
-#world-inner{position:absolute;left:0;top:0;width:2200px;height:1350px;transform-origin:0 0;filter:drop-shadow(0 34px 28px rgba(0,0,0,.38));transition:none}
+#world-inner{position:absolute;left:0;top:0;width:2200px;height:2200px;transform-origin:0 0;filter:drop-shadow(0 34px 28px rgba(0,0,0,.38));transition:none}
 .tile{cursor:pointer;transition:filter .2s}.tile polygon{stroke:rgba(20,32,23,.55);stroke-width:4;vector-effect:non-scaling-stroke}.tile:hover polygon{filter:brightness(1.12)}.tile.you polygon{fill:rgba(55,135,172,.72);stroke:#8fcfe8}.tile.north polygon{fill:rgba(154,83,77,.66);stroke:#db9c94}.tile.south polygon{fill:rgba(116,83,151,.66);stroke:#cdb5e4}.tile.neutral polygon{fill:rgba(113,124,88,.56);stroke:#aab49d}
 .terrain{opacity:.62;pointer-events:none}.tree{fill:#33573d}.tree2{fill:#456e48}.field{stroke:#c4b86e;stroke-width:5;opacity:.5}.hill{fill:#677854}.road{fill:none;stroke:#9b8860;stroke-width:12;opacity:.72;stroke-linecap:round}.river{fill:none;stroke:#4c8ca0;stroke-width:18;opacity:.88;stroke-linecap:round}
 .settlement{pointer-events:none}.building{fill:#bba57d}.roof{fill:#74413a}.fort{fill:#858981;stroke:#6d776d;stroke-width:4}.flag-you{fill:#8fd4eb}.flag-enemy{fill:#e29a8f}
@@ -40,10 +40,8 @@ button:active{transform:translateY(1px)}
 <div id="world"><div id="world-inner">
 <svg id="svg" viewBox="0 0 2200 2200" width="2200" height="2200" xmlns="http://www.w3.org/2000/svg">
 <defs><linearGradient id="ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7d9366"/><stop offset=".55" stop-color="#70855b"/><stop offset="1" stop-color="#647951"/></linearGradient></defs>
-<rect x="0" y="0" width="2200" height="2200" rx="90" fill="url(#ground)"/>
-<path class="river" d="M130 0 C210 180 120 340 250 520 S170 880 290 1200 M2070 0 C1960 180 2080 340 1950 540 S2040 900 1900 1200"/>
-<path class="road" d="M110 650 Q500 590 780 650 T1500 620 T2110 560 M600 90 Q650 300 620 500 T650 760 T600 1160"/>
-<g id="tiles"></g><g id="fx"></g><circle id="map-selection" cx="0" cy="0" r="1" fill="none"/>
+<rect id="map-ground" x="0" y="0" width="2200" height="2200" rx="90" fill="url(#ground)"/>
+<g id="tiles"></g><g id="features"></g><g id="fx"></g><circle id="map-selection" cx="0" cy="0" r="1" fill="none"/>
 </svg></div></div>
 <div id="radial"></div>
 </div>
@@ -51,15 +49,19 @@ button:active{transform:translateY(1px)}
 <div id="selection" class="glass"><div class="selection-name" id="sel-name">Territory 10</div><div class="selection-meta" id="sel-meta">You · Gold · Select a territory</div></div>
 <div id="panel"></div><div id="toast"></div><div id="tooltip" aria-hidden="true"></div>
 </div>
+<script src="map-generator.js"></script>
 <script src="map-data.js"></script>
 <script src="simulation.js"></script>
 <script>
+const MAPDATA=window.AttritionMapData;
 const SIM=window.AttritionSimulation;
 let DATA=SIM.mapView();
-let selected=9;
+let selected=Math.max(0,DATA.findIndex(t=>t.owner==='you'&&t.settlement==='capital'));
 let drag={active:false,sx:0,sy:0,cx:0,cz:0,moved:false};
-let camera={x:1100,y:1.85,z:600},zoom=1,radialOpen=false,openKind=null,activeResource=null;
-const HALF_DIAG=250/Math.sqrt(2),GRID_CENTER={x:1100,y:1100};
+const HALF_DIAG=MAPDATA.world.tileSize/Math.sqrt(2);
+const GRID_CENTER={x:MAPDATA.world.width/2,y:MAPDATA.world.height/2};
+let camera={x:GRID_CENTER.x,y:1.85,z:GRID_CENTER.y},zoom=1,radialOpen=false,openKind=null,activeResource=null;
+const ROAD_SET=new Set((MAPDATA.roadLinks||[]).map(link=>link.slice().sort((a,b)=>a-b).join(':')));
 const ICON={Food:'🍞',Wood:'🪵',Stone:'🪨',Iron:'⚙️',Oil:'🛢️',Mana:'🔮',Gold:'🪙'};
 const TOOLTIP={
   resource:{
@@ -90,7 +92,19 @@ const TOOLTIP={
     view:{type:'Action',desc:'Keep the map as the active view.'}
   }
 };
-function gridPoint(t){return{x:GRID_CENTER.x+(t.col-t.row-2)*HALF_DIAG,y:GRID_CENTER.y+(t.col+t.row-5)*HALF_DIAG}}
+function gridPoint(t){
+ const xOffset=(t.col-t.row-((MAPDATA.world.cols-MAPDATA.world.rows)/2))*HALF_DIAG;
+ const yOffset=(t.col+t.row-((MAPDATA.world.cols+MAPDATA.world.rows-2)/2))*HALF_DIAG;
+ return{x:GRID_CENTER.x+xOffset,y:GRID_CENTER.y+yOffset};
+}
+function roadKey(a,b){return[a,b].sort((x,y)=>x-y).join(':')}
+function roadExists(a,b){return ROAD_SET.has(roadKey(a,b))}
+function renderMapFeatures(){
+ const g=document.getElementById('features');
+ if(!g)return;
+ const paths=(MAPDATA.rivers||[]).map(points=>'<polyline class="river" points="'+points.map(p=>p.join(',')).join(' ')+'"/>').join('');
+ g.innerHTML=paths;
+}
 function polygon(t){const p=gridPoint(t),d=HALF_DIAG;return[[p.x,p.y-d],[p.x+d,p.y],[p.x,p.y+d],[p.x-d,p.y]]}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function resourceLabel(k){return ICON[k]+' '+k}
@@ -140,7 +154,7 @@ function makeSvg(){
    const p=polygon(t),pts=p.map(x=>x.join(',')).join(' '),cc=gridPoint(t),fort=t.buildings&&t.buildings.Fort?1:0;
    return '<g class="tile '+esc(t.owner)+(t.status==='battle'?' battle-tile':'')+'" data-i="'+i+'" onclick="selectTile('+i+')" data-tooltip="'+i+'">'+
     '<defs><clipPath id="clip-'+i+'"><polygon points="'+pts+'"/></clipPath></defs><polygon points="'+pts+'"/>'+
-    '<g clip-path="url(#clip-'+i+')" class="terrain">'+terrainSvg(t,cc)+'</g>'+
+    '<g clip-path="url(#clip-'+i+')" class="terrain">'+roadSvg(t,cc)+terrainSvg(t,cc)+'</g>'+
     '<g clip-path="url(#clip-'+i+')" class="settlement">'+settlementSvg(t,cc,fort)+'</g>'+
     '<text class="name" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y-92)+'">'+esc(t.name)+'</text>'+
     '<text class="owner" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y-74)+'">'+(t.owner==='you'?'YOU':t.owner.toUpperCase())+' · '+t.resource+'</text>'+
@@ -164,6 +178,15 @@ function makeSvg(){
        '<span class="tip-key">'+army+'</span>'
      ]});
  });
+}
+function roadSvg(t,c){
+ const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+ return dirs.map(([dc,dr])=>{
+   const n=DATA.find(x=>x.col===t.col+dc&&x.row===t.row+dr);
+   if(!n||!roadExists(t.id,n.id))return '';
+   const p=gridPoint(n);
+   return '<line class="road" x1="'+c.x+'" y1="'+c.y+'" x2="'+p.x+'" y2="'+p.y+'"/>';
+ }).join('');
 }
 function terrainSvg(t,c){
  if(t.terrain==='forest')return Array.from({length:8},(_,i)=>'<circle class="tree" cx="'+(c.x-78+(i%4)*52)+'" cy="'+(c.y+8+Math.floor(i/4)*48)+'" r="'+(15+(i%3)*2)+'"/>').join('');
@@ -364,13 +387,18 @@ function openPortal(){const r=SIM.openPortal();toast(r.message);refreshGame()}
 function portalAttack(portalId,index){const r=SIM.portalAttack(portalId,index);toast(r.message);refreshGame()}
 function advanceHour(){SIM.tick();refreshGame();toast('1 hour passed')}
 function resetSeason(){SIM.reset();openKind=null;refreshGame();toast('State reset')}
+function newWorld(){
+ const seed='world-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+ localStorage.setItem('attrition-map-seed',seed);
+ location.replace(location.pathname+'?seed='+encodeURIComponent(seed));
+}
 function openResource(k){
  const s=SIM.getState(),income=SIM.getIncome(),upkeep=k==='Food'?SIM.getFoodUpkeep():0,p=document.getElementById('panel');activeResource=k;openKind='resource';
  p.innerHTML='<div class="panel-head"><div><h3>'+resourceLabel(k)+'</h3><div class="muted">Economy</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+Math.floor(s.resources[k]).toLocaleString()+'</b><small>Stored</small></div><div class="kv"><b>+'+Math.round(income[k]||0)+'/h</b><small>Production</small></div>'+(k==='Food'?'<div class="kv"><b>-'+Math.round(upkeep)+'/h</b><small>Population + army upkeep</small></div>':'')+'<div class="kv"><b>'+SIM.RESOURCE_INFO[k].cap.toLocaleString()+'</b><small>Storage cap</small></div></div>';
  decoratePanelTooltips('resource');p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
 }
 function toast(s){const d=document.getElementById('toast');d.textContent=s;d.classList.add('open');clearTimeout(toast._t);toast._t=setTimeout(()=>d.classList.remove('open'),1800)}
-function resetView(){camera.x=1100;camera.z=1100;zoom=1;applyView();if(radialOpen)buildRadial();toast('Map centered')}
+function resetView(){camera.x=GRID_CENTER.x;camera.z=GRID_CENTER.y;zoom=1;applyView();if(radialOpen)buildRadial();toast('Map centered')}
 function applyView(){
  const w=document.getElementById('world'),viewport=document.getElementById('map-viewport'),vw=viewport.clientWidth||window.innerWidth,vh=viewport.clientHeight||window.innerHeight,pitch=Math.cos(28*Math.PI/180);
  w.style.transform='matrix('+zoom+',0,0,'+(zoom*pitch)+','+(vw/2-zoom*camera.x)+','+(vh/2-zoom*pitch*camera.z)+')';
@@ -389,7 +417,7 @@ document.addEventListener('pointerover',e=>{
   if(!el||el.classList.contains('has-tooltip'))return;
   try{setTooltip(el,JSON.parse(el.getAttribute('data-tip-static')))}catch(_){}
 });
-makeSvg();renderResources();decorateTopActions();updateSelection();applyView();
+renderMapFeatures();makeSvg();renderResources();decorateTopActions();updateSelection();applyView();
 setInterval(()=>{SIM.tick();refreshGame()},20000);
 </script>
 </body></html>
