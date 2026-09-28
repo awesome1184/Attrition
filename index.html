@@ -53,6 +53,7 @@ button:active{transform:translateY(1px)}
 <script src="map-generator.js"></script>
 <script src="map-data.js"></script>
 <script src="simulation.js"></script>
+<script src="multiplayer.js"></script>
 <script>
 const MAPDATA=window.AttritionMapData;
 const SIM=window.AttritionSimulation;
@@ -222,8 +223,8 @@ function renderResources(){
    ]});
  });
 }
-function refreshGame(){
- const sync=SIM.syncToClock();
+async function refreshGame(){
+ const sync=await SIM.syncToClock();
  if(sync.seasonChanged){location.reload();return}
  DATA=SIM.mapView();renderResources();makeSvg();updateSelection();
  const progress=SIM.seasonProgress();
@@ -293,11 +294,11 @@ function actionsFor(t){
  const enemy=!['you','neutral'].includes(t.owner);
  return[{id:'details',label:'Details',glyph:'i'},{id:t.owner==='you'?'build':'scout',label:t.owner==='you'?'Build':'Scout',glyph:t.owner==='you'?'+':'◎'},{id:enemy?'attack':'move',label:enemy?'Attack':'Move',glyph:enemy?'⚔':'↗'},{id:t.owner==='you'?'army':'claim',label:t.owner==='you'?'Army':'Claim',glyph:t.owner==='you'?'⚑':'◆'},{id:'relations',label:'Relations',glyph:'◌'},{id:'view',label:'View',glyph:'◉'}];
 }
-function doAction(id){
+async function doAction(id){
  if(id==='view'){toast('Map view');return}
- if(id==='claim'){const r=SIM.claim(selected);toast(r.message);if(r.ok)refreshGame();return}
- if(id==='scout'){const r=SIM.scout(selected);toast(r.message);refreshGame();return}
- if(id==='attack'){const r=SIM.attack(selected);toast(r.message);if(r.ok)refreshGame();return}
+ if(id==='claim'){const r=await SIM.claim(selected);toast(r.message);refreshGame();return}
+ if(id==='scout'){const r=await SIM.scout(selected);toast(r.message);refreshGame();return}
+ if(id==='attack'){const r=await SIM.attack(selected);toast(r.message);refreshGame();return}
  if(id==='build'){openPanel('settlement');return}
  if(id==='move'||id==='army'){openPanel('army');return}
  if(id==='details'){openPanel('details');return}
@@ -387,12 +388,12 @@ function openPanel(kind){
  }
  p.innerHTML=html;decoratePanelTooltips(kind);p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
 }
-function buildAt(building){const r=SIM.queueBuilding(selected,building);toast(r.message);refreshGame()}
-function moveSelectedArmy(armyId,targetId){const r=SIM.moveArmy(armyId,targetId);toast(r.message);refreshGame()}
-function recruitSelected(unit,count){const r=SIM.recruit(selected,unit,count);toast(r.message);refreshGame()}
-function changeRelation(amount){const t=DATA[selected];const r=SIM.improveRelation(t.owner,amount);toast(r.message);refreshGame()}
-function openPortal(){const r=SIM.openPortal();toast(r.message);refreshGame()}
-function portalAttack(portalId,index){const r=SIM.portalAttack(portalId,index);toast(r.message);refreshGame()}
+async function buildAt(building){const r=await SIM.queueBuilding(selected,building);toast(r.message);refreshGame()}
+async function moveSelectedArmy(armyId,targetId){const r=await SIM.moveArmy(armyId,targetId);toast(r.message);refreshGame()}
+async function recruitSelected(unit,count){const r=await SIM.recruit(selected,unit,count);toast(r.message);refreshGame()}
+async function changeRelation(amount){const t=DATA[selected];const faction=t.ownerId||t.owner;const r=await SIM.improveRelation(faction,amount);toast(r.message);refreshGame()}
+async function openPortal(){const r=await SIM.openPortal();toast(r.message);refreshGame()}
+async function portalAttack(portalId,index){const r=await SIM.portalAttack(portalId,index);toast(r.message);refreshGame()}
 function openResource(k){
  const s=SIM.getState(),income=SIM.getIncome(),upkeep=k==='Food'?SIM.getFoodUpkeep():0,p=document.getElementById('panel');activeResource=k;openKind='resource';
  p.innerHTML='<div class="panel-head"><div><h3>'+resourceLabel(k)+'</h3><div class="muted">Economy</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+Math.floor(s.resources[k]).toLocaleString()+'</b><small>Stored</small></div><div class="kv"><b>+'+Math.round(income[k]||0)+'/h</b><small>Production</small></div>'+(k==='Food'?'<div class="kv"><b>-'+Math.round(upkeep)+'/h</b><small>Population + army upkeep</small></div>':'')+'<div class="kv"><b>'+SIM.RESOURCE_INFO[k].cap.toLocaleString()+'</b><small>Storage cap</small></div></div>';
@@ -420,6 +421,7 @@ document.addEventListener('pointerover',e=>{
 });
 renderMapFeatures();SIM.syncToClock();
 makeSvg();renderResources();decorateTopActions();updateSelection();applyView();
+window.AttritionMultiplayerReady.then(()=>refreshGame()).catch(err=>console.warn(err));
 document.getElementById('clock').textContent=SIM.formatTime()+' · '+SIM.seasonProgress().remainingDays+'d left';
 setInterval(()=>{refreshGame()},30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshGame()});
