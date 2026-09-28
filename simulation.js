@@ -3,7 +3,7 @@
   'use strict';
 
   const MAP = window.AttritionMapData;
-  const STORAGE_KEY = 'attrition-state-v1';
+  const STORAGE_KEY = 'attrition-state-v2';
 
   const RESOURCE_KEYS = ['Food', 'Wood', 'Stone', 'Iron', 'Oil', 'Mana', 'Gold'];
 
@@ -184,21 +184,29 @@
   function initialState() {
     const territories = MAP.territories.map(normalizeTerritory);
     const armies = {};
-    Object.entries({
-      9:  { owner: 'you', units: { Militia: 160, Riflemen: 80, FireMage: 20 } },
-      12: { owner: 'you', units: { Militia: 50, Riflemen: 20 } },
-      3:  { owner: 'north', units: { Militia: 1000, Riflemen: 900, AntiTank: 500, FireMage: 200 } },
-      14: { owner: 'south', units: { Militia: 900, Riflemen: 700, AntiTank: 350, FireMage: 150 } },
-      20: { owner: 'neutral', units: { Militia: 800, Riflemen: 250, FireMage: 150 } }
-    }).forEach(([id, data], n) => {
-      const t = territories[Number(id)];
+    const starterPlans = MAP.startingPositions?.armies || [
+      { owner: 'you', territoryId: MAP.territories.find(t => t.owner === 'you')?.id, kind: 'field' },
+      { owner: 'you', territoryId: MAP.territories.find(t => t.owner === 'you')?.id, kind: 'fort' },
+      { owner: 'north', territoryId: MAP.territories.find(t => t.owner === 'north')?.id, kind: 'field' },
+      { owner: 'south', territoryId: MAP.territories.find(t => t.owner === 'south')?.id, kind: 'field' },
+      { owner: 'neutral', territoryId: MAP.territories.find(t => t.owner === 'neutral')?.id, kind: 'field' }
+    ];
+    const unitSets = [
+      { Militia: 160, Riflemen: 80, FireMage: 20 },
+      { Militia: 50, Riflemen: 20 },
+      { Militia: 1000, Riflemen: 900, AntiTank: 500, FireMage: 200 },
+      { Militia: 900, Riflemen: 700, AntiTank: 350, FireMage: 150 },
+      { Militia: 800, Riflemen: 250, FireMage: 150 }
+    ];
+    starterPlans.forEach((plan, n) => {
+      const t = territories.find(x => x.id === Number(plan.territoryId));
       if (!t) return;
       const armyId = 'army-' + n;
       armies[armyId] = {
         id: armyId,
         owner: data.owner,
         territoryId: t.id,
-        units: data.units,
+        units: unitSets[n] || { Militia: 50 },
         order: null,
         supplies: 100,
         wounded: 0,
@@ -209,7 +217,8 @@
     });
 
     return {
-      version: 1,
+      version: 2,
+      mapSeed: MAP.seed,
       tick: 0,
       year: 1,
       day: 1,
@@ -241,7 +250,7 @@
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return initialState();
       const state = JSON.parse(saved);
-      if (!state || state.version !== 1) return initialState();
+      if (!state || state.version !== 2 || state.mapSeed !== MAP.seed || state.territories?.length !== MAP.territories.length) return initialState();
       return state;
     } catch (_) {
       return initialState();
