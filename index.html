@@ -209,7 +209,7 @@ function decorateTopActions(){
   ['⚑','Army','Interface','Open your armies and issue military orders.'],
   ['◈','Portal','Interface','Open or manage a temporary PvE portal.'],
   ['≡','Log','Interface','Review recent simulation events.'],
-  ['↻','Reload','Utility','Reload the game and clear the site's browser cache.'],
+  ['↻','Reload','Utility','Reload the game and clear the site browser cache.'],
   ['⚙','Settings','Interface','Simulation controls and map settings.']
  ];
  [...document.querySelectorAll('#top-actions .icon')].forEach((el,i)=>{const d=defs[i];if(d)setTooltip(el,{title:d[1],type:d[2],desc:d[3]})});
