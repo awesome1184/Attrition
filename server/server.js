@@ -96,7 +96,7 @@ const server = http.createServer(async (req, res) => {
       const pid = playerId(req, body);
       if (!pid) return sendJson(res, 401, {error:'Unauthorized'});
       const result = engine.action(pid, typeof body.action === 'string' ? body.action : '', body.args || {});
-      return sendJson(res, result.ok ? 200 : 400, {result,state:engine.snapshot(pid)});
+      return sendJson(res, 200, {result,state:engine.snapshot(pid)});
     }
     if (url.pathname.startsWith('/api/')) return sendJson(res, 404, {error:'API endpoint not found'});
     return serveStatic(req, res, url);
