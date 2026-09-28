@@ -51,6 +51,7 @@
       this.lastHeight = 0;
       this.anim = { start: 0, duration: 520, previous: null };
       this.destroyed = false;
+      this.menuVisible = false;
 
       this.buildGeometry();
       this.bind();
@@ -200,6 +201,7 @@
       state.selected = index;
       this.anim.previous = previous;
       this.anim.start = performance.now();
+      this.menuVisible = true;
       this.onSelect(index);
       this.queueRender();
     }
@@ -298,7 +300,7 @@
     }
 
     pickAction(clientX, clientY) {
-      if (!this.selectedIndex() && this.selectedIndex() !== 0) return null;
+      if (!this.menuVisible || (!this.selectedIndex() && this.selectedIndex() !== 0)) return null;
       const rect = this.canvas.getBoundingClientRect();
       const x = clientX - rect.left;
       const y = clientY - rect.top;
