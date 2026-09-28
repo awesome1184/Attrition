@@ -30,7 +30,7 @@ button:active{transform:translateY(1px)}
 #top-actions{pointer-events:auto;display:flex;gap:6px}.icon{min-width:40px}
 #selection{position:absolute;z-index:20;left:16px;bottom:16px;padding:11px 13px;min-width:220px}.selection-name{font-weight:800}.selection-meta{font-size:11px;color:var(--muted);margin-top:3px}
 #panel{position:absolute;z-index:30;left:50%;bottom:16px;transform:translateX(-50%);width:min(440px,calc(100vw - 32px));padding:14px;background:var(--glass2);border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.48);backdrop-filter:blur(16px);display:none}.panel-open{display:block}.panel-head{display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}.panel-head h3{margin:0}.muted{color:var(--muted);font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.kv{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:10px;padding:10px}.kv b{display:block}.kv small{color:var(--muted)}.panel-actions{display:flex;gap:7px;margin-top:10px}.panel-actions button{flex:1}
-#toast{position:absolute;z-index:50;top:78px;left:50%;transform:translate(-50%,-8px);opacity:0;padding:9px 13px;border-radius:10px;background:rgba(10,17,13,.94);border:1px solid rgba(239,212,119,.35);transition:.2s;pointer-events:none}#toast.open{opacity:1;transform:translate(-50%,0)}
+#toast{position:absolute;z-index:50;top:78px;left:50%;transform:translate(-50%,-8px);opacity:0;padding:9px 13px;border-radius:10px;background:rgba(10,17,13,.94);border:1px solid rgba(239,212,119,.35);transition:.2s;pointer-events:none}#toast.open{opacity:1;transform:translate(-50%,0)}#tooltip{position:fixed;z-index:100;max-width:min(340px,calc(100vw - 24px));padding:11px 12px;border:1px solid rgba(239,212,119,.3);border-radius:12px;background:rgba(8,15,12,.97);box-shadow:0 18px 50px rgba(0,0,0,.5);backdrop-filter:blur(16px);pointer-events:none;opacity:0;transform:translateY(5px);transition:opacity .12s,transform .12s;line-height:1.35}#tooltip.open{opacity:1;transform:translateY(0)}.tip-title{font-weight:850;font-size:13px}.tip-type{margin-top:2px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}.tip-desc{margin-top:7px;color:var(--text);font-size:12px}.tip-details{margin-top:8px;padding-top:7px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}.tip-details div+div{margin-top:3px}.tip-key{color:#dfe7dc}.has-tooltip{cursor:help}
 @media(max-width:700px){#resources{position:absolute;top:56px;left:0;max-width:100vw;right:0}.res{min-width:74px}.icon{min-width:36px;padding:8px}.glass{border-radius:10px}}
 </style>
 </head>
@@ -49,7 +49,7 @@ button:active{transform:translateY(1px)}
 </div>
 <div id="topbar"><div id="brand" class="glass"><div class="brand">ATTRITION</div><div class="sub" id="clock">YEAR 1 · DAY 1 · 00:00</div></div><div id="resources"></div><div id="top-actions"><button class="icon glass icon" onclick="openPanel('settlement')">⌂</button><button class="icon glass icon" onclick="openPanel('army')">⚑</button><button class="icon glass icon" onclick="openPanel('portal')">◈</button><button class="icon glass icon" onclick="openPanel('log')">≡</button><button class="icon glass icon" title="Reload and clear cache" onclick="reloadAndClearCache()">↻</button><button class="icon glass icon" onclick="openPanel('settings')">⚙</button></div></div>
 <div id="selection" class="glass"><div class="selection-name" id="sel-name">Territory 10</div><div class="selection-meta" id="sel-meta">You · Gold · Select a territory</div></div>
-<div id="panel"></div><div id="toast"></div>
+<div id="panel"></div><div id="toast"></div><div id="tooltip" aria-hidden="true"></div>
 </div>
 <script src="map-data.js"></script>
 <script src="simulation.js"></script>
@@ -61,6 +61,35 @@ let drag={active:false,sx:0,sy:0,cx:0,cz:0,moved:false};
 let camera={x:1100,y:1.85,z:600},zoom=1,radialOpen=false,openKind=null,activeResource=null;
 const HALF_DIAG=250/Math.sqrt(2),GRID_CENTER={x:1100,y:1100};
 const ICON={Food:'🍞',Wood:'🪵',Stone:'🪨',Iron:'⚙️',Oil:'🛢️',Mana:'🔮',Gold:'🪙'};
+const TOOLTIP={
+  resource:{
+    Food:{desc:'Keeps your population and armies supplied.',type:'Resource'},
+    Wood:{desc:'Used for basic construction.',type:'Resource'},
+    Stone:{desc:'Used for major buildings and fortifications.',type:'Resource'},
+    Iron:{desc:'Used for advanced buildings and military equipment.',type:'Resource'},
+    Oil:{desc:'Used for advanced military and logistics systems.',type:'Resource'},
+    Mana:{desc:'Used for special units and effects.',type:'Resource'},
+    Gold:{desc:'Used for trade, diplomacy, and flexible spending.',type:'Resource'}
+  },
+  terrain:{
+    plain:'Normal movement and defense.',
+    field:'Open terrain with standard movement.',
+    forest:'Harder to move through and useful for concealment.',
+    hill:'Slower movement and stronger defensive position.',
+    coast:'A coastal territory. Ports can interact with water systems.'
+  },
+  action:{
+    details:{type:'Action',desc:'Open the territory information panel.'},
+    build:{type:'Action',desc:'Open construction for this controlled territory.'},
+    scout:{type:'Action',desc:'Request information about an unknown or enemy territory. Reports arrive after a delay.'},
+    attack:{type:'Action',desc:'Order a nearby friendly army to attack this territory.'},
+    move:{type:'Action',desc:'Choose a neighboring territory for a friendly army to move into.'},
+    army:{type:'Action',desc:'Open army orders, recruitment, morale, supplies, and unit composition.'},
+    claim:{type:'Action',desc:'Take an adjacent neutral territory for yourself.'},
+    relations:{type:'Action',desc:'View and change your relationship with the territory owner.'},
+    view:{type:'Action',desc:'Keep the map as the active view.'}
+  }
+};
 function gridPoint(t){return{x:GRID_CENTER.x+(t.col-t.row-2)*HALF_DIAG,y:GRID_CENTER.y+(t.col+t.row-5)*HALF_DIAG}}
 function polygon(t){const p=gridPoint(t),d=HALF_DIAG;return[[p.x,p.y-d],[p.x+d,p.y],[p.x,p.y+d],[p.x-d,p.y]]}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -70,7 +99,7 @@ function makeSvg(){
  const g=document.getElementById('tiles');
  g.innerHTML=DATA.map((t,i)=>{
    const p=polygon(t),pts=p.map(x=>x.join(',')).join(' '),cc=gridPoint(t),fort=t.buildings&&t.buildings.Fort?1:0;
-   return '<g class="tile '+esc(t.owner)+(t.status==='battle'?' battle-tile':'')+'" data-i="'+i+'" onclick="selectTile('+i+')">'+
+   return '<g class="tile '+esc(t.owner)+(t.status==='battle'?' battle-tile':'')+'" data-i="'+i+'" onclick="selectTile('+i+')" data-tooltip="'+i+'">'+
     '<defs><clipPath id="clip-'+i+'"><polygon points="'+pts+'"/></clipPath></defs><polygon points="'+pts+'"/>'+
     '<g clip-path="url(#clip-'+i+')" class="terrain">'+terrainSvg(t,cc)+'</g>'+
     '<g clip-path="url(#clip-'+i+')" class="settlement">'+settlementSvg(t,cc,fort)+'</g>'+
@@ -79,6 +108,23 @@ function makeSvg(){
     (t.army?'<text class="army" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y+105)+'">⚑ '+Number(t.army).toLocaleString()+'</text>':'')+
     '<text class="resource" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y+60)+'">'+ICON[t.resource]+'</text></g>';
  }).join('');
+ document.querySelectorAll('.tile[data-tooltip]').forEach(el=>{
+   const t=DATA[Number(el.getAttribute('data-tooltip'))];
+   if(!t)return;
+   const income=SIM.getIncome(),localYield=(income[t.resource]||0);
+   const visible=SIM.getVisibleArmy(t.id);
+   const army=visible&&visible.hidden?'Army: unknown':visible&&visible.units?'Army: '+Object.values(visible.units).reduce((a,b)=>a+b,0).toLocaleString()+' units':'Army: none';
+   setTooltip(el,{title:t.name,type:'Territory · '+(t.owner==='you'?'Controlled':t.owner==='neutral'?'Neutral':'Enemy'),
+     desc:'A territory produces resources, houses population, and can contain buildings and armies.',
+     details:[
+       '<span class="tip-key">Owner:</span> '+esc(t.owner==='you'?'You':t.owner),
+       '<span class="tip-key">Terrain:</span> '+esc(t.terrain)+' · '+esc(TOOLTIP.terrain[t.terrain]||''),
+       '<span class="tip-key">Resource:</span> '+esc(t.resource)+' · +'+Math.round(localYield)+'/h',
+       '<span class="tip-key">Population:</span> '+Math.round(t.population),
+       '<span class="tip-key">Buildings:</span> '+Object.values(t.buildings||{}).reduce((a,b)=>a+b,0),
+       '<span class="tip-key">'+army+'</span>'
+     ]});
+ });
 }
 function terrainSvg(t,c){
  if(t.terrain==='forest')return Array.from({length:8},(_,i)=>'<circle class="tree" cx="'+(c.x-78+(i%4)*52)+'" cy="'+(c.y+8+Math.floor(i/4)*48)+'" r="'+(15+(i%3)*2)+'"/>').join('');
@@ -100,8 +146,17 @@ function renderResources(){
  const s=SIM.getState(),income=SIM.getIncome();
  document.getElementById('resources').innerHTML=Object.keys(SIM.RESOURCE_INFO).map(k=>{
   const cap=SIM.RESOURCE_INFO[k].cap,v=Math.floor(s.resources[k]||0);
-  return '<button class="res glass" title="'+esc(resourceLabel(k)+' · '+Math.round(income[k]||0)+'/hour')+'" onclick="openResource(\''+k+'\')"><span>'+ICON[k]+'</span><b>'+v.toLocaleString()+'</b><small>/'+cap.toLocaleString()+'</small></button>';
+  return '<button class="res glass" onclick="openResource(\''+k+'\')"><span>'+ICON[k]+'</span><b>'+v.toLocaleString()+'</b><small>/'+cap.toLocaleString()+'</small></button>';
  }).join('');
+ const buttons=document.querySelectorAll('#resources .res');
+ buttons.forEach((el,i)=>{
+   const k=Object.keys(SIM.RESOURCE_INFO)[i],s=SIM.getState(),income=SIM.getIncome();
+   setTooltip(el,{title:k,type:TOOLTIP.resource[k].type,desc:TOOLTIP.resource[k].desc,details:[
+     '<span class="tip-key">Stored:</span> '+Math.floor(s.resources[k]).toLocaleString()+' / '+SIM.RESOURCE_INFO[k].cap.toLocaleString(),
+     '<span class="tip-key">Production:</span> +'+Math.round(income[k]||0)+'/h',
+     ...(k==='Food'?['<span class="tip-key">Upkeep:</span> -'+Math.round(SIM.getFoodUpkeep())+'/h']:[])
+   ]});
+ });
 }
 function refreshGame(){
  DATA=SIM.mapView();renderResources();makeSvg();updateSelection();
@@ -109,6 +164,17 @@ function refreshGame(){
  if(openKind)openPanel(openKind);if(radialOpen)buildRadial();
 }
 function selectTile(i){selected=i;closePanel();radialOpen=true;updateSelection();pulse();buildRadial()}
+function decorateTopActions(){
+ const defs=[
+  ['⌂','Settlement','Interface','Open settlement development and construction.'],
+  ['⚑','Army','Interface','Open your armies and issue military orders.'],
+  ['◈','Portal','Interface','Open or manage a temporary PvE portal.'],
+  ['≡','Log','Interface','Review recent simulation events.'],
+  ['↻','Reload','Utility','Reload the game and clear the site's browser cache.'],
+  ['⚙','Settings','Interface','Simulation controls and map settings.']
+ ];
+ [...document.querySelectorAll('#top-actions .icon')].forEach((el,i)=>{const d=defs[i];if(d)setTooltip(el,{title:d[1],type:d[2],desc:d[3]})});
+}
 function updateSelection(){
  const t=DATA[selected];if(!t)return;
  document.querySelectorAll('.tile.selected').forEach(e=>e.classList.remove('selected'));
@@ -214,7 +280,12 @@ const vp=document.getElementById('map-viewport');
 vp.addEventListener('pointerdown',handleMapPointerDown);vp.addEventListener('pointermove',handleMapPointerMove);vp.addEventListener('pointerup',handleMapPointerUp);vp.addEventListener('pointercancel',handleMapPointerCancel);
 vp.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.72,Math.min(1.35,zoom*(e.deltaY<0?1.08:.93)));applyView();if(radialOpen)buildRadial()},{passive:false});
 window.addEventListener('resize',()=>{applyView();if(radialOpen)buildRadial()});
-makeSvg();renderResources();updateSelection();applyView();
+document.addEventListener('pointerover',e=>{
+  const el=e.target.closest&&e.target.closest('[data-tip-static]');
+  if(!el||el.classList.contains('has-tooltip'))return;
+  try{setTooltip(el,JSON.parse(el.getAttribute('data-tip-static')))}catch(_){}
+});
+makeSvg();renderResources();decorateTopActions();updateSelection();applyView();
 setInterval(()=>{SIM.tick();refreshGame()},20000);
 </script>
 </body></html>
