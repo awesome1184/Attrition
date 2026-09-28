@@ -84,7 +84,7 @@ function applyView(){
   const viewport=document.getElementById('map-viewport');
   const vw=viewport.clientWidth||window.innerWidth;
   const vh=viewport.clientHeight||window.innerHeight;
-  const ax=0.8660254038,ay=-0.5,az=0.8660254038,bz=0.5;
+  const ax=1,ay=0,az=0,bz=0.58;
   const tx=vw/2-zoom*(ax*camera.x+az*camera.z);
   const ty=vh/2-zoom*(ay*camera.x+bz*camera.z);
   w.style.transform='matrix('+(ax*zoom)+','+(ay*zoom)+','+(az*zoom)+','+(bz*zoom)+','+tx+','+ty+')';
@@ -112,7 +112,7 @@ function handleMapPointerMove(e){
   if(!drag.active)return;
   const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
   if(Math.hypot(dx,dy)>5)drag.moved=true;
-  const ax=0.8660254038,ay=-0.5,az=0.8660254038,bz=0.5;
+  const ax=1,ay=0,az=0,bz=0.58;
   const det=ax*bz-az*ay;
   const sx=dx/zoom,sy=dy/zoom;
   const worldDx=(bz*sx-az*sy)/det;
