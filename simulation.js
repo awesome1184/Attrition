@@ -204,7 +204,7 @@
       const armyId = 'army-' + n;
       armies[armyId] = {
         id: armyId,
-        owner: data.owner,
+        owner: plan.owner,
         territoryId: t.id,
         units: unitSets[n] || { Militia: 50 },
         order: null,
