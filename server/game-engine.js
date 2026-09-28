@@ -184,7 +184,7 @@ class GameEngine{
     if(existing.length)return existing.find(t=>t.settlement==='capital')||existing[0];
     const players=Object.keys(this.state.players).filter(id=>id!==pid);
     const occupiedPlayerIds=new Set(players.flatMap(id=>this.playerTerritories(id).map(t=>t.id)));
-    const neutral=this.state.territories.filter(t=>t.owner==='__UNASSIGNED__'&&!occupiedPlayerIds.has(t.id)&&!t.armyId&&t.settlement!=='ruins');
+    const neutral=this.state.territories.filter(t=>(t.owner==='__UNASSIGNED__'||t.owner==='neutral')&&!occupiedPlayerIds.has(t.id)&&!t.armyId&&t.settlement!=='ruins');
     if(!neutral.length)throw new Error('The world has no available starting territory.');
     const existingPlayerTerritories=players.flatMap(id=>this.playerTerritories(id));
     let target;
@@ -248,7 +248,7 @@ class GameEngine{
   authenticate(token){const pid=this.state.sessions[token];return pid&&this.state.players[pid]?pid:null;}
   claim(pid,id){
     const t=this.territory(id);
-    if(!t||t.owner!=='__UNASSIGNED__')return {ok:false,message:'This territory is not neutral.'};
+    if(!t||!['neutral','__UNASSIGNED__'].includes(t.owner)||t.armyId)return {ok:false,message:'This territory is not available to claim.'};
     if(!this.neighbors(t.id).some(n=>n.owner===pid))return {ok:false,message:'Claim from a neighboring territory.'};
     t.owner=pid;t.status='stable';t.population=40;t.populationCap=Math.max(t.populationCap,100);
     this.addEvent(this.player(pid).name+' claimed '+t.name+'.',pid);this.save();return {ok:true,message:t.name+' claimed.'};
@@ -276,7 +276,7 @@ class GameEngine{
     const army=this.state.armies[armyId],target=this.territory(targetId),origin=army&&this.territory(army.territoryId);
     if(!army||army.owner!==pid||!target||!origin)return {ok:false,message:'Invalid army order.'};
     if(!this.neighbors(origin.id).some(t=>t.id===target.id))return {ok:false,message:'Armies move one territory at a time.'};
-    if(target.owner!==pid&&target.owner!=='__UNASSIGNED__')return {ok:false,message:'Use Attack against enemy territory.'};
+    if(target.owner!==pid&&!['neutral','__UNASSIGNED__'].includes(target.owner))return {ok:false,message:'Use Attack against enemy territory.'};
     army.order={type:'move',targetId:target.id,remaining:target.terrain==='hill'?2:1};
     this.addEvent('Army ordered to '+target.name+'.',pid);this.save();return {ok:true,message:'Army moving to '+target.name+'.'};
   }
@@ -378,7 +378,7 @@ class GameEngine{
     if(army.order.remaining>0){army.order.remaining--;return;}
     const target=this.territory(army.order.targetId),origin=this.territory(army.territoryId);if(!target||!origin){army.order=null;return;}
     if(army.order.type==='move'){
-      if(target.owner==='__UNASSIGNED__'||target.owner===army.owner){
+      if(['neutral','__UNASSIGNED__'].includes(target.owner)||target.owner===army.owner){
         if(target.armyId&&target.armyId!==army.id){army.order=null;return;}
         origin.armyId=null;target.armyId=army.id;army.territoryId=target.id;army.order=null;
         if(army.owner.startsWith('player-'))this.addEvent('Army arrived at '+target.name+'.',army.owner);
@@ -451,7 +451,12 @@ class GameEngine{
     });
   }
   syncToClock(now=Date.now()){
-    if(this.currentSeasonNumber(now)!==this.state.season.number)return {seasonChanged:true,processed:0};
+    if(this.currentSeasonNumber(now)!==this.state.season.number){
+      this.map=this.generateMap();
+      this.state=initialWorld(this.map);
+      this.save();
+      return {seasonChanged:true,processed:0};
+    }
     const last=Number(this.state.lastWallClockMs||now),hours=Math.floor(Math.max(0,now-last)/3600000);
     if(hours<=0)return {seasonChanged:false,processed:0};
     const remaining=Math.max(0,CONFIG.season.lengthHours-(this.state.seasonHour||0)),max=Math.min(hours,remaining);
@@ -471,7 +476,7 @@ class GameEngine{
       const visible=this.visibleArmy(pid,t.id);
       const ownerIsPlayer=t.owner.startsWith('player-');
       return {id:t.id,index:t.index,name:t.name,owner:t.owner===pid?'you':t.owner==='__UNASSIGNED__'?'neutral':(ownerIsPlayer?'player':t.owner),
-        ownerId:t.owner,ownerName:ownerIsPlayer?(this.player(t.owner)?.name||'Player'):t.owner,
+        ownerId:t.owner,ownerName:ownerIsPlayer?(this.player(t.owner)?.name||'Player'):t.owner,ownerColor:ownerIsPlayer?(this.player(t.owner)?.color||null):null,
         resource:t.resource,col:t.col,row:t.row,settlement:t.settlement,terrain:t.terrain,population:Math.round(t.population),
         buildings:clone(t.buildings),construction:clone(t.construction),
         army:visible&&!visible.hidden?sumUnits(visible.units||a?.units):0};
