@@ -51,168 +51,170 @@ button:active{transform:translateY(1px)}
 <div id="selection" class="glass"><div class="selection-name" id="sel-name">Territory 10</div><div class="selection-meta" id="sel-meta">You · Gold · Select a territory</div></div>
 <div id="panel"></div><div id="toast"></div>
 </div>
+<script src="map-data.js"></script>
+<script src="simulation.js"></script>
 <script>
-const DATA=(function(){
- const resources=['Iron','Wood','Food','Stone','Iron','Food','Oil','Food','Food','Gold','Wood','Iron','Oil','Mana','Mana','Food','Stone','Mana','Food','Oil','Iron','Mana','Oil','Wood','Stone','Wood','Food','Iron','Oil','Gold','Mana','Stone'];
- const owners=['north','north','north','north','north','north','neutral','neutral','neutral','you','you','you','you','south','south','south','south','south','neutral','neutral','neutral','neutral','neutral','neutral','neutral','neutral','neutral','neutral','neutral','neutral','south','south'];
- const terrain=['forest','forest','field','hill','hill','field','field','coast','forest','plain','field','plain','plain','hill','forest','coast','hill','forest','field','plain','hill','plain','forest','forest','plain','forest','field','plain','plain','hill','forest','coast'];
- return Array.from({length:32},(_,i)=>({id:i, name:'Territory '+(i+1), col:i%8,row:Math.floor(i/8), resource:resources[i], owner:owners[i], terrain:terrain[i], army:{3:2600,9:330,12:80,14:2100,20:1200}[i]||0, settlement:{9:'village',10:'capital',11:'town',12:'fort',13:'port',14:'town',15:'fort',16:'town',17:'village',18:'town',19:'port',21:'ruins',22:'town',23:'fort',24:'forest',25:'village',26:'village',27:'town',28:'town',29:'port',30:'ruins',31:'fort'}[i]||null}));
-})();
-const COLORS={you:'#3b8bb2',north:'#9d5a53',south:'#765b96',neutral:'#727d58'};
+const SIM=window.AttritionSimulation;
+let DATA=SIM.mapView();
+let selected=9;
+let drag={active:false,sx:0,sy:0,cx:0,cz:0,moved:false};
+let camera={x:1100,y:1.85,z:600},zoom=1,radialOpen=false,openKind=null;
+const HALF_DIAG=250/Math.sqrt(2),GRID_CENTER={x:1100,y:1100};
 const ICON={Food:'🍞',Wood:'🪵',Stone:'🪨',Iron:'⚙️',Oil:'🛢️',Mana:'🔮',Gold:'🪙'};
-let selected=9,drag={active:false,sx:0,sy:0,cx:0,cz:0,moved:false},camera={x:1100,y:1.85,z:600},zoom=1,radialOpen=false,worldDays=0;
-const TILE=250;
-const HALF_DIAG=TILE/Math.sqrt(2);
-const GRID_CENTER={x:1100,y:1100};
-function gridPoint(t){
-  return {
-    x:GRID_CENTER.x+(t.col-t.row-2)*HALF_DIAG,
-    y:GRID_CENTER.y+(t.col+t.row-5)*HALF_DIAG
-  };
-}
-function polygon(t){
-  const p=gridPoint(t),d=HALF_DIAG;
-  return [[p.x,p.y-d],[p.x+d,p.y],[p.x,p.y+d],[p.x-d,p.y]];
-}
+function gridPoint(t){return{x:GRID_CENTER.x+(t.col-t.row-2)*HALF_DIAG,y:GRID_CENTER.y+(t.col+t.row-5)*HALF_DIAG}}
+function polygon(t){const p=gridPoint(t),d=HALF_DIAG;return[[p.x,p.y-d],[p.x+d,p.y],[p.x,p.y+d],[p.x-d,p.y]]}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function resourceLabel(k){return ICON[k]+' '+k}
+function costText(cost){return Object.entries(cost||{}).map(([k,v])=>resourceLabel(k)+' '+v).join(' · ')}
 function makeSvg(){
  const g=document.getElementById('tiles');
  g.innerHTML=DATA.map((t,i)=>{
-   const p=polygon(t),pts=p.map(x=>x.join(',')).join(' '),c=gridPoint(t);
-   return '<g class="tile '+t.owner+'" data-i="'+i+'" onclick="selectTile('+i+')">'+
-     '<defs><clipPath id="clip-'+i+'"><polygon points="'+pts+'"/></clipPath></defs>'+
-     '<polygon points="'+pts+'"/>'+
-     '<g clip-path="url(#clip-'+i+')" class="terrain">'+terrainSvg(t,c)+'</g>'+
-     '<g clip-path="url(#clip-'+i+')" class="settlement">'+settlementSvg(t,c)+'</g>'+
-     '<text class="name" text-anchor="middle" x="'+c.x+'" y="'+(c.y-92)+'">'+esc(t.name)+'</text>'+
-     '<text class="owner" text-anchor="middle" x="'+c.x+'" y="'+(c.y-74)+'">'+(t.owner==='you'?'YOU':t.owner.toUpperCase())+' · '+t.resource+'</text>'+
-     (t.army?'<text class="army" text-anchor="middle" x="'+c.x+'" y="'+(c.y+105)+'">⚑ '+t.army.toLocaleString()+'</text>':'')+
-     '<text class="resource" text-anchor="middle" x="'+c.x+'" y="'+(c.y+60)+'">'+ICON[t.resource]+'</text>'+
-   '</g>';
+   const p=polygon(t),pts=p.map(x=>x.join(',')).join(' '),cc=gridPoint(t),fort=t.buildings&&t.buildings.Fort?1:0;
+   return '<g class="tile '+esc(t.owner)+(t.status==='battle'?' battle-tile':'')+'" data-i="'+i+'" onclick="selectTile('+i+')">'+
+    '<defs><clipPath id="clip-'+i+'"><polygon points="'+pts+'"/></clipPath></defs><polygon points="'+pts+'"/>'+
+    '<g clip-path="url(#clip-'+i+')" class="terrain">'+terrainSvg(t,cc)+'</g>'+
+    '<g clip-path="url(#clip-'+i+')" class="settlement">'+settlementSvg(t,cc,fort)+'</g>'+
+    '<text class="name" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y-92)+'">'+esc(t.name)+'</text>'+
+    '<text class="owner" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y-74)+'">'+(t.owner==='you'?'YOU':t.owner.toUpperCase())+' · '+t.resource+'</text>'+
+    (t.army?'<text class="army" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y+105)+'">⚑ '+Number(t.army).toLocaleString()+'</text>':'')+
+    '<text class="resource" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y+60)+'">'+ICON[t.resource]+'</text></g>';
  }).join('');
 }
 function terrainSvg(t,c){
- if(t.terrain==='forest'){
-   return Array.from({length:8},(_,i)=>{
-     const x=c.x-78+(i%4)*52,y=c.y+8+Math.floor(i/4)*48;
-     return '<circle class="tree" cx="'+x+'" cy="'+y+'" r="'+(15+(i%3)*2)+'"/>';
-   }).join('');
- }
- if(t.terrain==='field'){
-   return Array.from({length:6},(_,i)=>
-     '<path class="field" d="M'+(c.x-88)+' '+(c.y-34+i*27)+' L'+(c.x+88)+' '+(c.y-12+i*27)+'"/>'
-   ).join('');
- }
- if(t.terrain==='hill'){
-   return '<ellipse class="hill" cx="'+(c.x-24)+'" cy="'+(c.y+8)+'" rx="62" ry="31"/>'+
-          '<ellipse class="hill" cx="'+(c.x+48)+'" cy="'+(c.y+34)+'" rx="55" ry="28"/>';
- }
+ if(t.terrain==='forest')return Array.from({length:8},(_,i)=>'<circle class="tree" cx="'+(c.x-78+(i%4)*52)+'" cy="'+(c.y+8+Math.floor(i/4)*48)+'" r="'+(15+(i%3)*2)+'"/>').join('');
+ if(t.terrain==='field')return Array.from({length:6},(_,i)=>'<path class="field" d="M'+(c.x-88)+' '+(c.y-34+i*27)+' L'+(c.x+88)+' '+(c.y-12+i*27)+'"/>').join('');
+ if(t.terrain==='hill')return '<ellipse class="hill" cx="'+(c.x-24)+'" cy="'+(c.y+8)+'" rx="62" ry="31"/><ellipse class="hill" cx="'+(c.x+48)+'" cy="'+(c.y+34)+'" rx="55" ry="28"/>';
+ if(t.terrain==='coast')return '<path d="M'+(c.x-90)+' '+(c.y+42)+' Q'+c.x+' '+(c.y-18)+' '+(c.x+92)+' '+(c.y+42)+'" fill="none" stroke="#4c8ca0" stroke-width="16" opacity=".8"/>';
  return '<ellipse cx="'+c.x+'" cy="'+(c.y+25)+'" rx="82" ry="38" fill="rgba(80,103,83,.22)"/>';
 }
-function settlementSvg(t,c){
+function settlementSvg(t,c,fort){
  if(!t.settlement)return '';
- if(t.settlement==='ruins')
-   return '<rect x="'+(c.x-34)+'" y="'+(c.y+30)+'" width="68" height="34" class="fort"/>';
- let out='<rect x="'+(c.x-30)+'" y="'+(c.y+18)+'" width="60" height="35" class="building"/>'+
-         '<path class="roof" d="M'+(c.x-38)+' '+(c.y+18)+' L'+c.x+' '+(c.y-10)+' L'+(c.x+38)+' '+(c.y+18)+'Z"/>';
- if(t.settlement==='fort'||t.settlement==='capital'){
-   out+='<rect x="'+(c.x-56)+'" y="'+(c.y+8)+'" width="18" height="54" class="fort"/>'+
-        '<rect x="'+(c.x+38)+'" y="'+(c.y+8)+'" width="18" height="54" class="fort"/>';
- }
- if(t.settlement==='capital')
-   out+='<rect x="'+(c.x-3)+'" y="'+(c.y-48)+'" width="6" height="38" class="flag-you"/>';
- if(t.settlement==='village'){
-   out+='<rect x="'+(c.x-70)+'" y="'+(c.y+27)+'" width="22" height="22" class="building"/>'+
-        '<path class="roof" d="M'+(c.x-75)+' '+(c.y+27)+' L'+(c.x-59)+' '+(c.y+12)+' L'+(c.x-43)+' '+(c.y+27)+'Z"/>'+
-        '<rect x="'+(c.x+48)+'" y="'+(c.y+31)+'" width="22" height="20" class="building"/>';
- }
+ if(t.settlement==='ruins')return '<rect x="'+(c.x-34)+'" y="'+(c.y+30)+'" width="68" height="34" class="fort"/>';
+ let out='<rect x="'+(c.x-30)+'" y="'+(c.y+18)+'" width="60" height="35" class="building"/><path class="roof" d="M'+(c.x-38)+' '+(c.y+18)+' L'+c.x+' '+(c.y-10)+' L'+(c.x+38)+' '+(c.y+18)+'Z"/>';
+ if(fort||t.settlement==='fort'||t.settlement==='capital')out+='<rect x="'+(c.x-56)+'" y="'+(c.y+8)+'" width="18" height="54" class="fort"/><rect x="'+(c.x+38)+'" y="'+(c.y+8)+'" width="18" height="54" class="fort"/>';
+ if(t.settlement==='capital')out+='<rect x="'+(c.x-3)+'" y="'+(c.y-48)+'" width="6" height="38" class="flag-you"/>';
+ if(t.settlement==='village')out+='<rect x="'+(c.x-70)+'" y="'+(c.y+27)+'" width="22" height="22" class="building"/><path class="roof" d="M'+(c.x-75)+' '+(c.y+27)+' L'+(c.x-59)+' '+(c.y+12)+' L'+(c.x-43)+' '+(c.y+27)+'Z"/><rect x="'+(c.x+48)+'" y="'+(c.y+31)+'" width="22" height="20" class="building"/>';
  return out;
 }
-function renderResources(){const vals={Food:5000,Wood:3500,Stone:2200,Iron:900,Oil:200,Mana:80,Gold:800};document.getElementById('resources').innerHTML=Object.entries(vals).map(([k,v])=>`<button class="res glass" onclick="openResource('${k}')"><span>${ICON[k]}</span><b>${v.toLocaleString()}</b><small>/${k==='Gold'?'3000':k==='Mana'?'500':k==='Oil'?'2000':k==='Stone'?'8000':'10000'}</small></button>`).join('')}
-function selectTile(i){selected=i;closePanel();radialOpen=true;updateSelection();pulse();buildRadial();document.getElementById('map-selection').classList.remove('active');void document.getElementById('map-selection').offsetWidth;document.getElementById('map-selection').classList.add('active')}
-function updateSelection(){const t=DATA[selected],c=gridPoint(t);document.querySelectorAll('.tile.selected').forEach(e=>e.classList.remove('selected'));const el=document.querySelector('.tile[data-i="'+selected+'"]');if(el)el.classList.add('selected');document.getElementById('sel-name').textContent=t.name;document.getElementById('sel-meta').textContent=(t.owner==='you'?'You':t.owner==='neutral'?'Neutral':t.owner)+' · '+t.resource}
-function buildRadial(){const r=document.getElementById('radial');r.innerHTML='';const actions=actionsFor(DATA[selected]);actions.forEach((a,i)=>{const b=document.createElement('button');b.className='radial-btn';b.innerHTML='<span>'+a.glyph+'</span><span>'+a.label+'</span>';b.type='button';b.onpointerdown=e=>e.stopPropagation();b.onclick=e=>{e.stopPropagation();doAction(a.id)};r.appendChild(b)});const vp=document.getElementById('map-viewport').getBoundingClientRect(),el=document.querySelector('.tile[data-i="'+selected+'"] polygon');if(!el)return;const bb=el.getBoundingClientRect(),cx=bb.left-vp.left+bb.width/2,cy=bb.top-vp.top+bb.height/2;const radius=Math.min(165,Math.max(115,Math.min(vp.width,vp.height)*.16));[...r.querySelectorAll('.radial-btn')].forEach((b,i)=>{const angle=-Math.PI/2+i*(Math.PI*2/actions.length);const x=cx+Math.cos(angle)*radius,y=cy+Math.sin(angle)*radius;b.style.left=x+'px';b.style.top=y+'px';requestAnimationFrame(()=>b.classList.add('show'));const line=document.createElement('div');line.className='radial-line';line.style.left=cx+'px';line.style.top=cy+'px';line.style.width=radius+'px';line.style.transform='rotate('+angle+'rad)';r.appendChild(line);setTimeout(()=>line.style.opacity='.65',40)});r.classList.add('open')}
-function actionsFor(t){const enemy=!['you','neutral'].includes(t.owner);return[{id:'details',label:'Details',glyph:'i'},{id:t.owner==='you'?'build':'scout',label:t.owner==='you'?'Build':'Scout',glyph:t.owner==='you'?'+':'◎'},{id:enemy?'attack':'move',label:enemy?'Attack':'Move',glyph:enemy?'⚔':'↗'},{id:t.owner==='you'?'army':'claim',label:t.owner==='you'?'Army':'Claim',glyph:t.owner==='you'?'⚑':'◆'},{id:'relations',label:'Relations',glyph:'◌'},{id:'view',label:'View',glyph:'◉'}]}
-function doAction(id){const t=DATA[selected];if(id==='view'){toast('Map view');return}if(id==='claim'){if(t.owner==='neutral'){t.owner='you';toast('Territory claimed');makeSvg();updateSelection();buildRadial()}else toast('Cannot claim this territory');return}if(id==='scout'){toast('Scout report ready');openPanel('details');return}if(id==='attack'){toast('Army action prepared');openPanel('army');return}if(id==='build'){toast('Build controls opened');openPanel('settlement');return}if(id==='details'){openPanel('details');return}if(id==='army'){openPanel('army');return}if(id==='relations'){openPanel('relations')}}
-function pulse(){const p=document.getElementById('map-selection');const c=gridPoint(DATA[selected]);p.setAttribute('cx',c.x);p.setAttribute('cy',c.y);p.classList.remove('active');void p.offsetWidth;p.classList.add('active')}
-function closePanel(){const p=document.getElementById('panel');p.classList.remove('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open')}
-function openPanel(kind){const t=DATA[selected],p=document.getElementById('panel');let html='';if(kind==='details')html='<div class="panel-head"><div><h3>'+t.name+'</h3><div class="muted">'+t.resource+' · '+(t.owner==='you'?'You':t.owner==='neutral'?'Neutral':t.owner)+'</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+t.resource+'</b><small>Resource</small></div><div class="kv"><b>'+(t.settlement||'None')+'</b><small>Settlement</small></div><div class="kv"><b>'+(t.army?t.army.toLocaleString():'None')+'</b><small>Army</small></div><div class="kv"><b>'+(((t.col>0||t.row>0))?'Connected':'Edge')+'</b><small>Position</small></div></div>';else if(kind==='settlement')html='<div class="panel-head"><div><h3>Settlement</h3><div class="muted">Development stays visible on the world.</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>420 / 500</b><small>Population</small></div><div class="kv"><b>3</b><small>Farms</small></div><div class="kv"><b>2</b><small>Lumber Mills</small></div><div class="kv"><b>1</b><small>Quarry</small></div></div><div class="panel-actions"><button onclick="doAction(\'build\')">Build House</button></div>';else if(kind==='army')html='<div class="panel-head"><div><h3>Army</h3><div class="muted">1,?00 total units · 40 wounded</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>120</b><small>Militia</small></div><div class="kv"><b>80</b><small>Spearmen</small></div><div class="kv"><b>70</b><small>Archers</small></div><div class="kv"><b>40</b><small>Other</small></div></div>';else if(kind==='portal')html='<div class="panel-head"><div><h3>Portal</h3><div class="muted">PvE encounter</div></div><button onclick="closePanel()">×</button></div><div class="kv"><b>Closed</b><small>Open a portal to fight outside the main world.</small></div><div class="panel-actions"><button onclick="toast(\'Portal opened\')">Open Portal</button></div>';else if(kind==='log')html='<div class="panel-head"><div><h3>Log</h3><div class="muted">Recent world events</div></div><button onclick="closePanel()">×</button></div><div class="kv"><small>No recent events.</small></div>';else if(kind==='settings')html='<div class="panel-head"><div><h3>Settings</h3><div class="muted">Map controls</div></div><button onclick="closePanel()">×</button></div><div class="panel-actions"><button onclick="resetView()">Center Map</button></div>';else if(kind==='relations')html='<div class="panel-head"><div><h3>Relations</h3><div class="muted">Diplomacy for '+t.name+'</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+(t.owner==='neutral'?'Neutral':'Known')+'</b><small>Current relation</small></div><div class="kv"><b>'+t.owner.toUpperCase()+'</b><small>Control</small></div></div>';p.innerHTML=html;p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open')}
-function openResource(k){toast(k+' selected')}
-function toast(s){const d=document.getElementById('toast');d.textContent=s;d.classList.add('open');clearTimeout(toast._t);toast._t=setTimeout(()=>d.classList.remove('open'),1400)}
+function renderResources(){
+ const s=SIM.getState(),income=SIM.getIncome();
+ document.getElementById('resources').innerHTML=Object.keys(SIM.RESOURCE_INFO).map(k=>{
+  const cap=SIM.RESOURCE_INFO[k].cap,v=Math.floor(s.resources[k]||0);
+  return '<button class="res glass" title="'+esc(resourceLabel(k)+' · '+Math.round(income[k]||0)+'/hour')+'" onclick="openResource(\''+k+'\')"><span>'+ICON[k]+'</span><b>'+v.toLocaleString()+'</b><small>/'+cap.toLocaleString()+'</small></button>';
+ }).join('');
+}
+function refreshGame(){
+ DATA=SIM.mapView();renderResources();makeSvg();updateSelection();
+ document.getElementById('clock').textContent=SIM.formatTime()+' · SEASON '+SIM.getState().season.number;
+ if(openKind)openPanel(openKind);if(radialOpen)buildRadial();
+}
+function selectTile(i){selected=i;closePanel();radialOpen=true;updateSelection();pulse();buildRadial()}
+function updateSelection(){
+ const t=DATA[selected];if(!t)return;
+ document.querySelectorAll('.tile.selected').forEach(e=>e.classList.remove('selected'));
+ const el=document.querySelector('.tile[data-i="'+selected+'"]');if(el)el.classList.add('selected');
+ document.getElementById('sel-name').textContent=t.name;
+ document.getElementById('sel-meta').textContent=(t.owner==='you'?'You':t.owner==='neutral'?'Neutral':t.owner)+' · '+t.resource+(t.construction&&t.construction.length?' · Building':'');
+}
+function buildRadial(){
+ const r=document.getElementById('radial');r.innerHTML='';const t=DATA[selected];if(!t)return;
+ const actions=actionsFor(t);
+ actions.forEach(a=>{const b=document.createElement('button');b.className='radial-btn';b.innerHTML='<span>'+a.glyph+'</span><span>'+a.label+'</span>';b.type='button';b.onpointerdown=e=>e.stopPropagation();b.onclick=e=>{e.stopPropagation();doAction(a.id)};r.appendChild(b)});
+ const vp=document.getElementById('map-viewport').getBoundingClientRect(),el=document.querySelector('.tile[data-i="'+selected+'"] polygon');if(!el)return;
+ const bb=el.getBoundingClientRect(),cx=bb.left-vp.left+bb.width/2,cy=bb.top-vp.top+bb.height/2,radius=Math.min(165,Math.max(115,Math.min(vp.width,vp.height)*.16));
+ [...r.querySelectorAll('.radial-btn')].forEach((b,i)=>{
+  const angle=-Math.PI/2+i*(Math.PI*2/actions.length),x=cx+Math.cos(angle)*radius,y=cy+Math.sin(angle)*radius;
+  b.style.left=x+'px';b.style.top=y+'px';requestAnimationFrame(()=>b.classList.add('show'));
+  const line=document.createElement('div');line.className='radial-line';line.style.left=cx+'px';line.style.top=cy+'px';line.style.width=radius+'px';line.style.transform='rotate('+(angle*180/Math.PI)+'deg)';r.appendChild(line);
+ });
+ r.classList.add('open');
+}
+function actionsFor(t){
+ const enemy=!['you','neutral'].includes(t.owner);
+ return[{id:'details',label:'Details',glyph:'i'},{id:t.owner==='you'?'build':'scout',label:t.owner==='you'?'Build':'Scout',glyph:t.owner==='you'?'+':'◎'},{id:enemy?'attack':'move',label:enemy?'Attack':'Move',glyph:enemy?'⚔':'↗'},{id:t.owner==='you'?'army':'claim',label:t.owner==='you'?'Army':'Claim',glyph:t.owner==='you'?'⚑':'◆'},{id:'relations',label:'Relations',glyph:'◌'},{id:'view',label:'View',glyph:'◉'}];
+}
+function doAction(id){
+ if(id==='view'){toast('Map view');return}
+ if(id==='claim'){const r=SIM.claim(selected);toast(r.message);if(r.ok)refreshGame();return}
+ if(id==='scout'){const r=SIM.scout(selected);toast(r.message);refreshGame();return}
+ if(id==='attack'){const r=SIM.attack(selected);toast(r.message);if(r.ok)refreshGame();return}
+ if(id==='build'){openPanel('settlement');return}
+ if(id==='move'||id==='army'){openPanel('army');return}
+ if(id==='details'){openPanel('details');return}
+ if(id==='relations'){openPanel('relations');return}
+}
+function pulse(){const p=document.getElementById('map-selection'),c=gridPoint(DATA[selected]);p.setAttribute('cx',c.x);p.setAttribute('cy',c.y);p.classList.remove('active');void p.offsetWidth;p.classList.add('active')}
+function closePanel(){document.getElementById('panel').classList.remove('panel-open');openKind=null;radialOpen=false;document.getElementById('radial').classList.remove('open')}
+function openPanel(kind){
+ const t=DATA[selected],p=document.getElementById('panel');openKind=kind;let html='';
+ if(kind==='details'){
+  const visible=SIM.getVisibleArmy(t.id);let armyText='None';
+  if(visible&&visible.hidden)armyText='Unknown · Scout required';else if(visible)armyText=Number(Object.values(visible.units||{}).reduce((a,b)=>a+b,0)).toLocaleString()+' units';
+  html='<div class="panel-head"><div><h3>'+esc(t.name)+'</h3><div class="muted">'+resourceLabel(t.resource)+' · '+esc(t.owner)+'</div></div><button onclick="closePanel()">×</button></div><div class="grid">'+
+   '<div class="kv"><b>'+resourceLabel(t.resource)+'</b><small>Local resource</small></div><div class="kv"><b>'+(t.settlement||'None')+'</b><small>Settlement</small></div>'+
+   '<div class="kv"><b>'+Math.round(t.population)+'</b><small>Population</small></div><div class="kv"><b>'+armyText+'</b><small>Army information</small></div>'+
+   '<div class="kv"><b>'+Object.values(t.buildings||{}).reduce((a,b)=>a+b,0)+'</b><small>Buildings</small></div><div class="kv"><b>'+(t.buildings?.Fort||0)+'</b><small>Fort levels</small></div></div>';
+ } else if(kind==='settlement'){
+  if(t.owner!=='you')html='<div class="panel-head"><div><h3>Settlement</h3><div class="muted">Only controlled territories can be developed.</div></div><button onclick="closePanel()">×</button></div>';
+  else{
+   const b=t.buildings||{},queue=(t.construction||[]).map(x=>x.building+' ('+x.remaining+'h)').join(', ')||'Empty';
+   const rows=Object.entries(b).filter(([,n])=>n>0).map(([k,n])=>'<div class="kv"><b>'+esc(k)+' × '+n+'</b><small>'+esc(SIM.BUILDINGS[k]?.desc||'')+'</small></div>').join('');
+   const options=Object.entries(SIM.BUILDINGS).map(([k,d])=>'<button onclick="buildAt(\''+k+'\')">'+esc(k)+'<br><small>'+costText(d.cost)+' · '+d.time+'h</small></button>').join('');
+   html='<div class="panel-head"><div><h3>'+esc(t.name)+'</h3><div class="muted">'+Math.round(t.population)+' population · '+(t.construction.length?'construction active':'ready')+'</div></div><button onclick="closePanel()">×</button></div><div class="grid">'+rows+'</div><div class="kv" style="margin-top:8px"><b>Construction</b><small>'+esc(queue)+'</small></div><div class="panel-actions" style="flex-wrap:wrap">'+options+'</div>';
+  }
+ } else if(kind==='army'){
+  const armies=SIM.getPlayerArmies(),current=armies.find(a=>a.territoryId===t.id);let body='';
+  if(current){
+   body='<div class="grid"><div class="kv"><b>'+Math.round(current.morale)+'</b><small>Morale</small></div><div class="kv"><b>'+Math.round(current.supplies)+'</b><small>Supplies</small></div>'+
+    Object.entries(current.units).map(([k,v])=>'<div class="kv"><b>'+Number(v).toLocaleString()+'</b><small>'+esc(k)+'</small></div>').join('')+'</div>';
+   body+='<div class="panel-actions">';SIM.getNeighbors(current.territoryId).filter(n=>n.owner==='you'||n.owner==='neutral').forEach(n=>body+='<button onclick="moveSelectedArmy(\''+current.id+'\','+n.id+')">Move to '+n.name.replace('Territory ','')+'</button>');body+='</div>';
+   body+='<div class="panel-actions"><button onclick="recruitSelected(\'Militia\',10)">+10 Militia</button><button onclick="recruitSelected(\'Riflemen\',10)">+10 Riflemen</button><button onclick="recruitSelected(\'FireMage\',5)">+5 Fire Mages</button></div>';
+  } else body='<div class="kv"><b>No army here</b><small>Select a territory with a friendly army to issue movement or recruitment orders.</small></div>';
+  const list=armies.map(a=>{const at=DATA.find(x=>x.id===a.territoryId);return '<div class="kv" style="margin-top:6px"><b>'+esc(at?at.name:'Unknown')+'</b><small>'+Number(Object.values(a.units).reduce((x,y)=>x+y,0)).toLocaleString()+' units · '+Math.round(a.morale)+' morale</small></div>'}).join('');
+  html='<div class="panel-head"><div><h3>Army</h3><div class="muted">Military orders resolve over time.</div></div><button onclick="closePanel()">×</button></div>'+body+'<div style="margin-top:10px" class="muted">Your armies</div>'+list;
+ } else if(kind==='relations'){
+  const faction=t.owner,relation=SIM.getState().relations[faction]??0;
+  html='<div class="panel-head"><div><h3>Relations</h3><div class="muted">'+esc(faction)+' relationship</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+relation+'</b><small>Relation</small></div><div class="kv"><b>20 Gold</b><small>Cost to improve</small></div></div><div class="panel-actions"><button onclick="changeRelation(5)">Improve +5</button><button onclick="changeRelation(-5)">Lower -5</button></div>';
+ } else if(kind==='portal'){
+  const pz=SIM.getPortal();
+  if(!pz)html='<div class="panel-head"><div><h3>Portal</h3><div class="muted">Temporary PvE world</div></div><button onclick="closePanel()">×</button></div><div class="kv"><b>No open portal</b><small>Open one to create a temporary enemy territory network.</small></div><div class="panel-actions"><button onclick="openPortal()">Open Portal</button></div>';
+  else html='<div class="panel-head"><div><h3>Portal</h3><div class="muted">'+pz.defeated+' cleared · '+(pz.territories.length-1-pz.defeated)+' remaining</div></div><button onclick="closePanel()">×</button></div>'+pz.territories.map((n,i)=>'<div class="kv" style="margin-top:6px"><b>'+esc(n.name)+' · '+(n.owner==='you'?'Cleared':'Enemy')+'</b><small>'+((n.army&&n.army.units)?'Enemy power '+Math.round(Object.values(n.army.units).reduce((a,b)=>a+b,0)):'Cleared')+'</small>'+(n.owner!=='you'?'<button style="margin-top:6px" onclick="portalAttack(\''+pz.id+'\','+i+')">Attack</button>':'')+'</div>').join('');
+ } else if(kind==='log'){
+  html='<div class="panel-head"><div><h3>Log</h3><div class="muted">World events</div></div><button onclick="closePanel()">×</button></div>'+SIM.getState().events.slice(0,10).map(e=>'<div class="kv" style="margin-top:6px"><b>Tick '+e.tick+'</b><small>'+esc(e.text)+'</small></div>').join('');
+ } else if(kind==='settings'){
+  html='<div class="panel-head"><div><h3>Settings</h3><div class="muted">Simulation controls</div></div><button onclick="closePanel()">×</button></div><div class="panel-actions"><button onclick="advanceHour()">Advance 1 hour</button><button onclick="resetSeason()">Reset state</button></div><div class="kv" style="margin-top:8px"><b>20 real seconds = 1 game hour</b><small>Production, movement, combat, construction, morale, and information updates happen each tick.</small></div>';
+ }
+ p.innerHTML=html;p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
+}
+function buildAt(building){const r=SIM.queueBuilding(selected,building);toast(r.message);refreshGame()}
+function moveSelectedArmy(armyId,targetId){const r=SIM.moveArmy(armyId,targetId);toast(r.message);refreshGame()}
+function recruitSelected(unit,count){const r=SIM.recruit(selected,unit,count);toast(r.message);refreshGame()}
+function changeRelation(amount){const t=DATA[selected];const r=SIM.improveRelation(t.owner,amount);toast(r.message);refreshGame()}
+function openPortal(){const r=SIM.openPortal();toast(r.message);refreshGame()}
+function portalAttack(portalId,index){const r=SIM.portalAttack(portalId,index);toast(r.message);refreshGame()}
+function advanceHour(){SIM.tick();refreshGame();toast('1 hour passed')}
+function resetSeason(){SIM.reset();openKind=null;refreshGame();toast('State reset')}
+function openResource(k){
+ const s=SIM.getState(),income=SIM.getIncome(),upkeep=k==='Food'?SIM.getFoodUpkeep():0,p=document.getElementById('panel');openKind='resource';
+ p.innerHTML='<div class="panel-head"><div><h3>'+resourceLabel(k)+'</h3><div class="muted">Economy</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+Math.floor(s.resources[k]).toLocaleString()+'</b><small>Stored</small></div><div class="kv"><b>+'+Math.round(income[k]||0)+'/h</b><small>Production</small></div>'+(k==='Food'?'<div class="kv"><b>-'+Math.round(upkeep)+'/h</b><small>Population + army upkeep</small></div>':'')+'<div class="kv"><b>'+SIM.RESOURCE_INFO[k].cap.toLocaleString()+'</b><small>Storage cap</small></div></div>';
+ p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
+}
+function toast(s){const d=document.getElementById('toast');d.textContent=s;d.classList.add('open');clearTimeout(toast._t);toast._t=setTimeout(()=>d.classList.remove('open'),1800)}
 function resetView(){camera.x=1100;camera.z=1100;zoom=1;applyView();if(radialOpen)buildRadial();toast('Map centered')}
 function applyView(){
-  const w=document.getElementById('world');
-  const viewport=document.getElementById('map-viewport');
-  const vw=viewport.clientWidth||window.innerWidth;
-  const vh=viewport.clientHeight||window.innerHeight;
-  const pitchDeg=28;
-  const pitch=Math.cos(pitchDeg*Math.PI/180);
-  const ax=1,ay=0,az=0,bz=pitch;
-  const tx=vw/2-zoom*(ax*camera.x+az*camera.z);
-  const ty=vh/2-zoom*(ay*camera.x+bz*camera.z);
-  w.style.transform='matrix('+(ax*zoom)+','+(ay*zoom)+','+(az*zoom)+','+(bz*zoom)+','+tx+','+ty+')';
+ const w=document.getElementById('world'),viewport=document.getElementById('map-viewport'),vw=viewport.clientWidth||window.innerWidth,vh=viewport.clientHeight||window.innerHeight,pitch=Math.cos(28*Math.PI/180);
+ w.style.transform='matrix('+zoom+',0,0,'+(zoom*pitch)+','+(vw/2-zoom*camera.x)+','+(vh/2-zoom*pitch*camera.z)+')';
 }
-async function reloadAndClearCache(){
-  try{
-    if(window.caches){
-      const keys=await caches.keys();
-      await Promise.all(keys.map(k=>caches.delete(k)));
-    }
-  }catch(_){}
-  location.replace(location.pathname+'?reload='+Date.now());
-}
-function tileFromPoint(clientX,clientY){
-  const el=document.elementFromPoint(clientX,clientY);
-  const tile=el&&el.closest?el.closest('.tile'):null;
-  return tile?Number(tile.getAttribute('data-i')):null;
-}
-function handleMapPointerDown(e){
-  if(e.button!==0||e.target.closest('.radial-btn'))return;
-  drag={active:true,sx:e.clientX,sy:e.clientY,cx:camera.x,cz:camera.z,moved:false};
-  document.getElementById('map-viewport').classList.add('dragging');
-}
-function handleMapPointerMove(e){
-  if(!drag.active)return;
-  const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
-  if(Math.hypot(dx,dy)>5)drag.moved=true;
-  const pitchDeg=12;
-  const pitch=Math.cos(pitchDeg*Math.PI/180);
-  const ax=1,ay=0,az=0,bz=pitch;
-  const det=ax*bz-az*ay;
-  const sx=dx/zoom,sy=dy/zoom;
-  const worldDx=(bz*sx-az*sy)/det;
-  const worldDz=(-ay*sx+ax*sy)/det;
-  camera.x=drag.cx-worldDx;
-  camera.z=drag.cz-worldDz;
-  applyView();
-  if(radialOpen)buildRadial();
-}
-function handleMapPointerUp(e){
-  if(!drag.active)return;
-  const moved=drag.moved;
-  drag.active=false;
-  document.getElementById('map-viewport').classList.remove('dragging');
-  if(!moved){
-    const hit=tileFromPoint(e.clientX,e.clientY);
-    if(hit!==null)selectTile(hit);
-  }
-}
-function handleMapPointerCancel(){
-  drag.active=false;
-  document.getElementById('map-viewport').classList.remove('dragging');
-}
+function tileFromPoint(clientX,clientY){const el=document.elementFromPoint(clientX,clientY),tile=el&&el.closest?el.closest('.tile'):null;return tile?Number(tile.getAttribute('data-i')):null}
+function handleMapPointerDown(e){if(e.button!==0||(e.target.closest&&e.target.closest('.radial-btn')))return;drag={active:true,sx:e.clientX,sy:e.clientY,cx:camera.x,cz:camera.z,moved:false};document.getElementById('map-viewport').classList.add('dragging')}
+function handleMapPointerMove(e){if(!drag.active)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;if(Math.hypot(dx,dy)>5)drag.moved=true;const pitch=Math.cos(28*Math.PI/180);camera.x=drag.cx-dx/zoom;camera.z=drag.cz-dy/(zoom*pitch);applyView();if(radialOpen)buildRadial()}
+function handleMapPointerUp(e){if(!drag.active)return;const moved=drag.moved;drag.active=false;document.getElementById('map-viewport').classList.remove('dragging');if(!moved){const hit=tileFromPoint(e.clientX,e.clientY);if(hit!==null)selectTile(hit)}}
+function handleMapPointerCancel(){drag.active=false;document.getElementById('map-viewport').classList.remove('dragging')}
 const vp=document.getElementById('map-viewport');
-vp.addEventListener('pointerdown',handleMapPointerDown);
-vp.addEventListener('pointermove',handleMapPointerMove);
-vp.addEventListener('pointerup',handleMapPointerUp);
-vp.addEventListener('pointercancel',handleMapPointerCancel);
-vp.addEventListener('wheel',e=>{
-  e.preventDefault();
-  zoom=Math.max(.72,Math.min(1.35,zoom*(e.deltaY<0?1.08:.93)));
-  applyView();
-  if(radialOpen)buildRadial();
-},{passive:false});
+vp.addEventListener('pointerdown',handleMapPointerDown);vp.addEventListener('pointermove',handleMapPointerMove);vp.addEventListener('pointerup',handleMapPointerUp);vp.addEventListener('pointercancel',handleMapPointerCancel);
+vp.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.72,Math.min(1.35,zoom*(e.deltaY<0?1.08:.93)));applyView();if(radialOpen)buildRadial()},{passive:false});
 window.addEventListener('resize',()=>{applyView();if(radialOpen)buildRadial()});
-makeSvg();renderResources();updateSelection();applyView();setInterval(()=>{worldDays=(worldDays+10)%1440;const h=String(Math.floor(worldDays/60)).padStart(2,'0'),m=String(worldDays%60).padStart(2,'0');document.getElementById('clock').textContent='YEAR 1 · DAY 1 · '+h+':'+m},600000);
+makeSvg();renderResources();updateSelection();applyView();
+setInterval(()=>{SIM.tick();refreshGame()},20000);
 </script>
 </body></html>
