@@ -249,6 +249,44 @@ function doAction(id){
  if(id==='relations'){openPanel('relations');return}
 }
 function pulse(){const p=document.getElementById('map-selection'),c=gridPoint(DATA[selected]);p.setAttribute('cx',c.x);p.setAttribute('cy',c.y);p.classList.remove('active');void p.offsetWidth;p.classList.add('active')}
+function decoratePanelTooltips(kind){
+ const p=document.getElementById('panel');if(!p)return;
+ const labels={
+  'Local resource':'The primary resource found in this territory.',
+  'Settlement':'The settlement currently occupying this territory.',
+  'Population':'Residents available for growth, work, and recruitment.',
+  'Army information':'Army details depend on what information you currently have.',
+  'Buildings':'Total buildings currently operating in this territory.',
+  'Fort levels':'Fortification strength that improves defense.',
+  'Morale':'Willingness of an army to keep fighting. Low morale reduces effective power.',
+  'Supplies':'Operational supplies used by the army. Low supplies hurt morale and efficiency.',
+  'Construction':'Buildings in this territory that are currently being built.',
+  'Relation':'Your current relationship with this faction.',
+  'Cost to improve':'Gold required to improve relations.',
+  'Resource':'What this territory produces.',
+  'Economy':'Stored amount, production rate, upkeep, and storage capacity.'
+ };
+ p.querySelectorAll('.kv').forEach(el=>{
+  const label=el.querySelector('small')?.textContent?.trim()||'Information';
+  const value=el.querySelector('b')?.textContent?.trim()||'';
+  let desc=labels[label]||'A game value that describes the current state of this system.';
+  if(label==='Construction')desc='Queued buildings consume resources immediately and finish after their build time.';
+  if(kind==='settlement'&&value.match(/×/))desc='A completed building. Hover the value to inspect what this building changes.';
+  if(kind==='army'&&label&&['Militia','Riflemen','FireMage','AntiTank'].includes(label))desc='A unit type in this army. Unit types differ in cost, power, speed, upkeep, and element.';
+  setTooltip(el,{title:label,type:'State',desc,details:value?['<span class="tip-key">Current:</span> '+esc(value)]:[]});
+ });
+ p.querySelectorAll('.panel-actions button').forEach(el=>{
+  const text=el.textContent.replace(/\s+/g,' ').trim();
+  let desc='Perform this action on the current selection.';
+  if(/Advance 1 hour/i.test(text))desc='Advance the simulation by one game hour for testing.';
+  else if(/Move to/i.test(text))desc='Order the selected army to move to a neighboring territory.';
+  else if(/\+\d+ (Militia|Riflemen|Fire Mages)/i.test(text))desc='Recruit units using population and the listed resources.';
+  else if(/Improve/i.test(text))desc='Spend Gold to improve relations with the selected faction.';
+  else if(/Build|Farm|Mill|Quarry|Mine|Oil|Mana|Market|Barracks|Workshop|Fort/i.test(text))desc='Queue this building. Resources are spent now and construction finishes over time.';
+  else if(/Attack/i.test(text))desc='Commit a friendly army to a PvE attack in the selected portal territory.';
+  setTooltip(el,{title:text,type:'Action',desc});
+ });
+}
 function closePanel(){document.getElementById('panel').classList.remove('panel-open');openKind=null;radialOpen=false;document.getElementById('radial').classList.remove('open')}
 function openPanel(kind){
  const t=DATA[selected],p=document.getElementById('panel');openKind=kind;let html='';
@@ -289,7 +327,7 @@ function openPanel(kind){
  } else if(kind==='resource'){ const k=activeResource||'Food'; const s=SIM.getState(); const income=SIM.getIncome(); const upkeep=k==='Food'?SIM.getFoodUpkeep():0; html='<div class="panel-head"><div><h3>'+resourceLabel(k)+'</h3><div class="muted">Economy</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+Math.floor(s.resources[k]).toLocaleString()+'</b><small>Stored</small></div><div class="kv"><b>+'+Math.round(income[k]||0)+'/h</b><small>Production</small></div>'+(k==='Food'?'<div class="kv"><b>-'+Math.round(upkeep)+'/h</b><small>Population + army upkeep</small></div>':'')+'<div class="kv"><b>'+SIM.RESOURCE_INFO[k].cap.toLocaleString()+'</b><small>Storage cap</small></div></div>'; } else if(kind==='settings'){
   html='<div class="panel-head"><div><h3>Settings</h3><div class="muted">Simulation controls</div></div><button onclick="closePanel()">×</button></div><div class="panel-actions"><button onclick="advanceHour()">Advance 1 hour</button><button onclick="resetSeason()">Reset state</button></div><div class="kv" style="margin-top:8px"><b>20 real seconds = 1 game hour</b><small>Production, movement, combat, construction, morale, and information updates happen each tick.</small></div>';
  }
- p.innerHTML=html;p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
+ p.innerHTML=html;decoratePanelTooltips(kind);p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
 }
 function buildAt(building){const r=SIM.queueBuilding(selected,building);toast(r.message);refreshGame()}
 function moveSelectedArmy(armyId,targetId){const r=SIM.moveArmy(armyId,targetId);toast(r.message);refreshGame()}
