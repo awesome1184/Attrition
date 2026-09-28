@@ -760,19 +760,26 @@
   }
 
   function syncToClock(now = Date.now()) {
+    if (currentSeasonNumber(now) !== state.season.number) return { seasonChanged: true, processed: 0 };
     const last = Number(state.lastWallClockMs || now);
     const elapsedHours = Math.floor(Math.max(0, now - last) / 3600000);
-    if (elapsedHours <= 0) return 0;
+    if (elapsedHours <= 0) return { seasonChanged: false, processed: 0 };
 
     let processed = 0;
-    const maxHours = Math.min(elapsedHours, window.AttritionGameConfig.season.lengthHours - (state.seasonHour || 0));
+    const remainingSeasonHours = Math.max(0, window.AttritionGameConfig.season.lengthHours - (state.seasonHour || 0));
+    const maxHours = Math.min(elapsedHours, remainingSeasonHours);
     while (processed < maxHours) {
       tick();
       processed += 1;
     }
     state.lastWallClockMs = last + processed * 3600000;
     save();
-    return processed;
+    return { seasonChanged: false, processed };
+  }
+
+  function currentSeasonNumber(now = Date.now()) {
+    const start = Date.parse(window.AttritionGameConfig.season.start);
+    return Math.floor(Math.max(0, now - start) / (window.AttritionGameConfig.season.lengthHours * 3600000)) + 1;
   }
 
   function seasonProgress(now = Date.now()) {
@@ -784,12 +791,6 @@
       remainingHours: Math.max(0, state.season.lengthHours - hours),
       remainingDays: Math.max(0, Math.ceil((state.season.lengthHours - hours) / 24))
     };
-  }
-
-  function reset() {
-    state = initialState();
-    save();
-    return true;
   }
 
   function getState() { return state; }
@@ -834,6 +835,7 @@
     tick,
     syncToClock,
     seasonProgress,
+    currentSeasonNumber,
     save
   };
 })();
