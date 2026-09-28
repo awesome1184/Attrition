@@ -49,6 +49,7 @@ button:active{transform:translateY(1px)}
 <div id="selection" class="glass"><div class="selection-name" id="sel-name">Territory 10</div><div class="selection-meta" id="sel-meta">You · Gold · Select a territory</div></div>
 <div id="panel"></div><div id="toast"></div><div id="tooltip" aria-hidden="true"></div>
 </div>
+<script src="game-config.js"></script>
 <script src="map-generator.js"></script>
 <script src="map-data.js"></script>
 <script src="simulation.js"></script>
@@ -56,6 +57,7 @@ button:active{transform:translateY(1px)}
 const MAPDATA=window.AttritionMapData;
 const SIM=window.AttritionSimulation;
 let DATA=SIM.mapView();
+const CONFIG=window.AttritionGameConfig;
 let selected=Math.max(0,DATA.findIndex(t=>t.owner==='you'&&t.settlement==='capital'));
 let drag={active:false,sx:0,sy:0,cx:0,cz:0,moved:false};
 const HALF_DIAG=MAPDATA.world.tileSize/Math.sqrt(2);
@@ -221,8 +223,11 @@ function renderResources(){
  });
 }
 function refreshGame(){
+ const sync=SIM.syncToClock();
+ if(sync.seasonChanged){location.reload();return}
  DATA=SIM.mapView();renderResources();makeSvg();updateSelection();
- document.getElementById('clock').textContent=SIM.formatTime()+' · SEASON '+SIM.getState().season.number;
+ const progress=SIM.seasonProgress();
+ document.getElementById('clock').textContent=SIM.formatTime()+' · '+progress.remainingDays+'d left';
  if(openKind)openPanel(openKind);if(radialOpen)buildRadial();
 }
 function selectTile(i){selected=i;closePanel();radialOpen=true;updateSelection();pulse();buildRadial()}
@@ -375,7 +380,11 @@ function openPanel(kind){
  } else if(kind==='log'){
   html='<div class="panel-head"><div><h3>Log</h3><div class="muted">World events</div></div><button onclick="closePanel()">×</button></div>'+SIM.getState().events.slice(0,10).map(e=>'<div class="kv" style="margin-top:6px"><b>Tick '+e.tick+'</b><small>'+esc(e.text)+'</small></div>').join('');
  } else if(kind==='resource'){ const k=activeResource||'Food'; const s=SIM.getState(); const income=SIM.getIncome(); const upkeep=k==='Food'?SIM.getFoodUpkeep():0; html='<div class="panel-head"><div><h3>'+resourceLabel(k)+'</h3><div class="muted">Economy</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+Math.floor(s.resources[k]).toLocaleString()+'</b><small>Stored</small></div><div class="kv"><b>+'+Math.round(income[k]||0)+'/h</b><small>Production</small></div>'+(k==='Food'?'<div class="kv"><b>-'+Math.round(upkeep)+'/h</b><small>Population + army upkeep</small></div>':'')+'<div class="kv"><b>'+SIM.RESOURCE_INFO[k].cap.toLocaleString()+'</b><small>Storage cap</small></div></div>'; } else if(kind==='settings'){
-  html='<div class="panel-head"><div><h3>Settings</h3><div class="muted">World and simulation</div></div><button onclick="closePanel()">×</button></div><div class="panel-actions"><button onclick="advanceHour()">Advance 1 hour</button><button onclick="resetSeason()">Reset state</button></div><div class="kv" style="margin-top:8px"><b>World seed</b><small>'+esc(MAPDATA.seed)+'</small></div><div class="panel-actions"><button onclick="newWorld()">Generate New World</button></div><div class="kv" style="margin-top:8px"><b>20 real seconds = 1 game hour</b><small>Production, movement, combat, construction, morale, and information update each tick.</small></div>';
+  const progress=SIM.seasonProgress();
+  html='<div class="panel-head"><div><h3>Settings</h3><div class="muted">Game information</div></div><button onclick="closePanel()">×</button></div>'+
+   '<div class="grid"><div class="kv"><b>Season '+progress.season+'</b><small>Current season</small></div><div class="kv"><b>'+progress.remainingDays+' days</b><small>Until season end</small></div>'+
+   '<div class="kv"><b>'+esc(MAPDATA.seed)+'</b><small>World seed</small></div><div class="kv"><b>1 hour</b><small>Simulation tick</small></div></div>'+
+   '<div class="kv" style="margin-top:8px"><b>World time is continuous</b><small>Resources, construction, armies, combat, morale, and scouting continue while you are offline.</small></div>';
  }
  p.innerHTML=html;decoratePanelTooltips(kind);p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
 }
@@ -385,13 +394,6 @@ function recruitSelected(unit,count){const r=SIM.recruit(selected,unit,count);to
 function changeRelation(amount){const t=DATA[selected];const r=SIM.improveRelation(t.owner,amount);toast(r.message);refreshGame()}
 function openPortal(){const r=SIM.openPortal();toast(r.message);refreshGame()}
 function portalAttack(portalId,index){const r=SIM.portalAttack(portalId,index);toast(r.message);refreshGame()}
-function advanceHour(){SIM.tick();refreshGame();toast('1 hour passed')}
-function resetSeason(){SIM.reset();openKind=null;refreshGame();toast('State reset')}
-function newWorld(){
- const seed='world-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
- localStorage.setItem('attrition-map-seed',seed);
- location.replace(location.pathname+'?seed='+encodeURIComponent(seed));
-}
 function openResource(k){
  const s=SIM.getState(),income=SIM.getIncome(),upkeep=k==='Food'?SIM.getFoodUpkeep():0,p=document.getElementById('panel');activeResource=k;openKind='resource';
  p.innerHTML='<div class="panel-head"><div><h3>'+resourceLabel(k)+'</h3><div class="muted">Economy</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+Math.floor(s.resources[k]).toLocaleString()+'</b><small>Stored</small></div><div class="kv"><b>+'+Math.round(income[k]||0)+'/h</b><small>Production</small></div>'+(k==='Food'?'<div class="kv"><b>-'+Math.round(upkeep)+'/h</b><small>Population + army upkeep</small></div>':'')+'<div class="kv"><b>'+SIM.RESOURCE_INFO[k].cap.toLocaleString()+'</b><small>Storage cap</small></div></div>';
@@ -417,7 +419,10 @@ document.addEventListener('pointerover',e=>{
   if(!el||el.classList.contains('has-tooltip'))return;
   try{setTooltip(el,JSON.parse(el.getAttribute('data-tip-static')))}catch(_){}
 });
-renderMapFeatures();makeSvg();renderResources();decorateTopActions();updateSelection();applyView();
-setInterval(()=>{SIM.tick();refreshGame()},20000);
+renderMapFeatures();SIM.syncToClock();
+makeSvg();renderResources();decorateTopActions();updateSelection();applyView();
+document.getElementById('clock').textContent=SIM.formatTime()+' · '+SIM.seasonProgress().remainingDays+'d left';
+setInterval(()=>{refreshGame()},30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshGame()});
 </script>
 </body></html>
