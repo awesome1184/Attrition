@@ -86,12 +86,13 @@
   function terrainFor(col, row, cols, rows, seed) {
     const elevation = fbm(col / 4.2, row / 4.2, seed + ':elevation');
     const moisture = fbm((col + 17) / 3.5, (row - 11) / 3.5, seed + ':moisture');
+    const coastNoise = fbm((col - 31) / 2.4, (row + 9) / 2.4, seed + ':coast');
     const edge = Math.min(col, row, cols - 1 - col, rows - 1 - row);
 
-    if (edge === 0 && elevation < 0.58 && moisture < 0.65) return 'coast';
-    if (elevation > 0.70) return 'hill';
-    if (moisture > 0.68) return 'forest';
-    if (moisture > 0.48) return 'field';
+    if (edge === 0 && elevation < 0.45 && coastNoise > 0.48) return 'coast';
+    if (elevation > 0.66) return 'hill';
+    if (moisture > 0.55) return 'forest';
+    if (moisture > 0.36) return 'field';
     return 'plain';
   }
 
