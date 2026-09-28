@@ -295,5 +295,7 @@
     };
   }
 
-  const api = { generate };\n  if (typeof module !== 'undefined' && module.exports) module.exports = api;\n  if (typeof window !== 'undefined') window.AttritionMapGenerator = api;
+  const api = { generate };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  if (typeof window !== 'undefined') window.AttritionMapGenerator = api;
 })();
