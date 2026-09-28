@@ -195,7 +195,7 @@
       armies[armyId] = {
         id: armyId,
         owner: data.owner,
-        territoryId: Number(id) + 1,
+        territoryId: t.id,
         units: data.units,
         order: null,
         supplies: 100,
@@ -203,7 +203,7 @@
         morale: 100,
         battleId: null
       };
-      const t = territories[Number(id) + 1];
+      const t = territories[Number(id)];
       if (t) t.armyId = armyId;
     });
 
