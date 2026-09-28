@@ -58,7 +58,7 @@ const SIM=window.AttritionSimulation;
 let DATA=SIM.mapView();
 let selected=9;
 let drag={active:false,sx:0,sy:0,cx:0,cz:0,moved:false};
-let camera={x:1100,y:1.85,z:600},zoom=1,radialOpen=false,openKind=null;
+let camera={x:1100,y:1.85,z:600},zoom=1,radialOpen=false,openKind=null,activeResource=null;
 const HALF_DIAG=250/Math.sqrt(2),GRID_CENTER={x:1100,y:1100};
 const ICON={Food:'🍞',Wood:'🪵',Stone:'🪨',Iron:'⚙️',Oil:'🛢️',Mana:'🔮',Gold:'🪙'};
 function gridPoint(t){return{x:GRID_CENTER.x+(t.col-t.row-2)*HALF_DIAG,y:GRID_CENTER.y+(t.col+t.row-5)*HALF_DIAG}}
@@ -181,7 +181,7 @@ function openPanel(kind){
   else html='<div class="panel-head"><div><h3>Portal</h3><div class="muted">'+pz.defeated+' cleared · '+(pz.territories.length-1-pz.defeated)+' remaining</div></div><button onclick="closePanel()">×</button></div>'+pz.territories.map((n,i)=>'<div class="kv" style="margin-top:6px"><b>'+esc(n.name)+' · '+(n.owner==='you'?'Cleared':'Enemy')+'</b><small>'+((n.army&&n.army.units)?'Enemy power '+Math.round(Object.values(n.army.units).reduce((a,b)=>a+b,0)):'Cleared')+'</small>'+(n.owner!=='you'?'<button style="margin-top:6px" onclick="portalAttack(\''+pz.id+'\','+i+')">Attack</button>':'')+'</div>').join('');
  } else if(kind==='log'){
   html='<div class="panel-head"><div><h3>Log</h3><div class="muted">World events</div></div><button onclick="closePanel()">×</button></div>'+SIM.getState().events.slice(0,10).map(e=>'<div class="kv" style="margin-top:6px"><b>Tick '+e.tick+'</b><small>'+esc(e.text)+'</small></div>').join('');
- } else if(kind==='settings'){
+ } else if(kind==='resource'){ const k=activeResource||'Food'; const s=SIM.getState(); const income=SIM.getIncome(); const upkeep=k==='Food'?SIM.getFoodUpkeep():0; html='<div class="panel-head"><div><h3>'+resourceLabel(k)+'</h3><div class="muted">Economy</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+Math.floor(s.resources[k]).toLocaleString()+'</b><small>Stored</small></div><div class="kv"><b>+'+Math.round(income[k]||0)+'/h</b><small>Production</small></div>'+(k==='Food'?'<div class="kv"><b>-'+Math.round(upkeep)+'/h</b><small>Population + army upkeep</small></div>':'')+'<div class="kv"><b>'+SIM.RESOURCE_INFO[k].cap.toLocaleString()+'</b><small>Storage cap</small></div></div>'; } else if(kind==='settings'){
   html='<div class="panel-head"><div><h3>Settings</h3><div class="muted">Simulation controls</div></div><button onclick="closePanel()">×</button></div><div class="panel-actions"><button onclick="advanceHour()">Advance 1 hour</button><button onclick="resetSeason()">Reset state</button></div><div class="kv" style="margin-top:8px"><b>20 real seconds = 1 game hour</b><small>Production, movement, combat, construction, morale, and information updates happen each tick.</small></div>';
  }
  p.innerHTML=html;p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
@@ -195,7 +195,7 @@ function portalAttack(portalId,index){const r=SIM.portalAttack(portalId,index);t
 function advanceHour(){SIM.tick();refreshGame();toast('1 hour passed')}
 function resetSeason(){SIM.reset();openKind=null;refreshGame();toast('State reset')}
 function openResource(k){
- const s=SIM.getState(),income=SIM.getIncome(),upkeep=k==='Food'?SIM.getFoodUpkeep():0,p=document.getElementById('panel');openKind='resource';
+ const s=SIM.getState(),income=SIM.getIncome(),upkeep=k==='Food'?SIM.getFoodUpkeep():0,p=document.getElementById('panel');activeResource=k;openKind='resource';
  p.innerHTML='<div class="panel-head"><div><h3>'+resourceLabel(k)+'</h3><div class="muted">Economy</div></div><button onclick="closePanel()">×</button></div><div class="grid"><div class="kv"><b>'+Math.floor(s.resources[k]).toLocaleString()+'</b><small>Stored</small></div><div class="kv"><b>+'+Math.round(income[k]||0)+'/h</b><small>Production</small></div>'+(k==='Food'?'<div class="kv"><b>-'+Math.round(upkeep)+'/h</b><small>Population + army upkeep</small></div>':'')+'<div class="kv"><b>'+SIM.RESOURCE_INFO[k].cap.toLocaleString()+'</b><small>Storage cap</small></div></div>';
  p.classList.add('panel-open');radialOpen=false;document.getElementById('radial').classList.remove('open');
 }
