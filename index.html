@@ -95,6 +95,45 @@ function polygon(t){const p=gridPoint(t),d=HALF_DIAG;return[[p.x,p.y-d],[p.x+d,p
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function resourceLabel(k){return ICON[k]+' '+k}
 function costText(cost){return Object.entries(cost||{}).map(([k,v])=>resourceLabel(k)+' '+v).join(' · ')}
+function tipHtml(title,type,desc,details=[]){
+ return '<div class="tip-title">'+esc(title)+'</div>'+
+  (type?'<div class="tip-type">'+esc(type)+'</div>':'')+
+  (desc?'<div class="tip-desc">'+esc(desc)+'</div>':'')+
+  (details.length?'<div class="tip-details">'+details.map(x=>'<div>'+x+'</div>').join('')+'</div>':'');
+}
+let tipTarget=null,tipTimer=null;
+function showTooltip(el,x,y){
+ const tip=document.getElementById('tooltip');if(!tip)return;
+ const data=el._tooltipData;if(!data)return;
+ clearTimeout(tipTimer);tipTimer=setTimeout(()=>{
+  tip.innerHTML=tipHtml(data.title,data.type,data.desc,data.details||[]);
+  tip.classList.add('open');tip.setAttribute('aria-hidden','false');positionTooltip(x,y);
+ },220);
+}
+function positionTooltip(x,y){
+ const tip=document.getElementById('tooltip');if(!tip||!tip.classList.contains('open'))return;
+ const pad=12,gap=14,rect=tip.getBoundingClientRect();
+ let left=x+gap,top=y+gap;
+ if(left+rect.width>window.innerWidth-pad)left=x-rect.width-gap;
+ if(top+rect.height>window.innerHeight-pad)top=y-rect.height-gap;
+ tip.style.left=Math.max(pad,left)+'px';tip.style.top=Math.max(pad,top)+'px';
+}
+function hideTooltip(){
+ clearTimeout(tipTimer);tipTarget=null;
+ const tip=document.getElementById('tooltip');
+ if(tip){tip.classList.remove('open');tip.setAttribute('aria-hidden','true')}
+}
+function setTooltip(el,data){
+ if(!el)return;
+ el._tooltipData=data;el.classList.add('has-tooltip');
+ if(el._tooltipBound)return;
+ el._tooltipBound=true;
+ el.addEventListener('pointerenter',e=>{tipTarget=el;showTooltip(el,e.clientX,e.clientY)});
+ el.addEventListener('pointermove',e=>{if(tipTarget===el)positionTooltip(e.clientX,e.clientY)});
+ el.addEventListener('pointerleave',hideTooltip);
+ el.addEventListener('pointerdown',hideTooltip);
+}
+
 function makeSvg(){
  const g=document.getElementById('tiles');
  g.innerHTML=DATA.map((t,i)=>{
