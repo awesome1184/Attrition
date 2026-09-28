@@ -333,7 +333,7 @@ function decoratePanelTooltips(kind){
  p.querySelectorAll('.panel-actions button').forEach(el=>{
   const text=el.textContent.replace(/\s+/g,' ').trim();
   let desc='Perform this action on the current selection.';
-  else if(/Move to/i.test(text))desc='Order the selected army to move to a neighboring territory.';
+  if(/Move to/i.test(text))desc='Order the selected army to move to a neighboring territory.';
   else if(/\+\d+ (Militia|Riflemen|Fire Mages)/i.test(text))desc='Recruit units using population and the listed resources.';
   else if(/Improve/i.test(text))desc='Spend Gold to improve relations with the selected faction.';
   else if(/Build|Farm|Mill|Quarry|Mine|Oil|Mana|Market|Barracks|Workshop|Fort/i.test(text))desc='Queue this building. Resources are spent now and construction finishes over time.';
