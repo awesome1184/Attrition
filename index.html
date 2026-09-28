@@ -224,7 +224,7 @@ function updateSelection(){
 function buildRadial(){
  const r=document.getElementById('radial');r.innerHTML='';const t=DATA[selected];if(!t)return;
  const actions=actionsFor(t);
- actions.forEach(a=>{const b=document.createElement('button');b.className='radial-btn';b.innerHTML='<span>'+a.glyph+'</span><span>'+a.label+'</span>';b.type='button';b.onpointerdown=e=>e.stopPropagation();b.onclick=e=>{e.stopPropagation();doAction(a.id)};r.appendChild(b)});
+ actions.forEach(a=>{const b=document.createElement('button');b.className='radial-btn';b.innerHTML='<span>'+a.glyph+'</span><span>'+a.label+'</span>';b.type='button';setTooltip(b,{title:a.label,type:TOOLTIP.action[a.id]?.type||'Action',desc:TOOLTIP.action[a.id]?.desc||'Perform this action.'});b.onpointerdown=e=>e.stopPropagation();b.onclick=e=>{e.stopPropagation();doAction(a.id)};r.appendChild(b)});
  const vp=document.getElementById('map-viewport').getBoundingClientRect(),el=document.querySelector('.tile[data-i="'+selected+'"] polygon');if(!el)return;
  const bb=el.getBoundingClientRect(),cx=bb.left-vp.left+bb.width/2,cy=bb.top-vp.top+bb.height/2,radius=Math.min(165,Math.max(115,Math.min(vp.width,vp.height)*.16));
  [...r.querySelectorAll('.radial-btn')].forEach((b,i)=>{
