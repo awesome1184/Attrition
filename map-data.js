@@ -1,13 +1,8 @@
 (function () {
   'use strict';
 
-  const querySeed = new URLSearchParams(location.search).get('seed');
-  const storedSeed = localStorage.getItem('attrition-map-seed');
-  const seed = querySeed || storedSeed || 'attrition-001';
-
-  if (storedSeed !== seed) {
-    try { localStorage.setItem('attrition-map-seed', seed); } catch (_) {}
-  }
+  const config = window.AttritionGameConfig;
+  const seed = config.season.worldSeed;
 
   window.AttritionMapData = window.AttritionMapGenerator.generate({
     seed,
