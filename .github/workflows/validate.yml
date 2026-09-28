@@ -1,0 +1,16 @@
+name: Validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm run check
+      - run: node -e "const {GameEngine}=require('./server/game-engine'); const e=new GameEngine('./server/data/ci'); const s=e.createSession('', 'CI Player'); if(!s.player.id) process.exit(1); const snap=e.snapshot(s.player.id); if(snap.map.length!==48) process.exit(2); console.log('engine smoke test passed');"
+      - run: rm -rf server/data/ci
