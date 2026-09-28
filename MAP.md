@@ -53,7 +53,7 @@ The map is backed by `simulation.js`, which owns the game state. `index.html` re
 
 `map-data.js` describes the initial world. `simulation.js` turns that data into mutable state. `index.html` does not own economy, combat, or diplomacy rules. This separation is intentional so procedural maps and alternate renderers can use the same simulation later.
 
-One real-world 20-second interval advances one game hour in the prototype. The Settings panel also exposes a manual one-hour advance control for testing.
+Game time advances continuously at one game hour per real hour. The client catches up elapsed hours when a player returns, so production, construction, movement, combat, morale, and scouting continue while offline.
 
 ## Procedural generation
 
