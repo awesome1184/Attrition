@@ -224,9 +224,11 @@ class GameEngine{
     const capital=this.spawnForPlayer(pid);
     const colors=['#3f88b0','#c99445','#7b9dce','#8b6ca8','#65a37b','#bd6e6e'];
     const playerCount=Object.keys(this.state.players).length+1;
+    const relations={north:-45,south:-20,neutral:0};
+    Object.keys(this.state.players).forEach(otherId=>{relations[otherId]=0;this.state.players[otherId].relations[pid]=0;});
     this.state.players[pid]={id:pid,name:name||('Player '+playerCount),color:colors[(playerCount-1)%colors.length],
       resources:{Food:5000,Wood:3500,Stone:2200,Iron:900,Oil:200,Mana:80,Gold:800},
-      population:420,populationCap:500,relations:{north:-45,south:-20,neutral:0},capitalId:capital.id,
+      population:420,populationCap:500,relations,capitalId:capital.id,
       createdAt:new Date().toISOString()};
     this.state.reports[pid]={};
     this.state.portals[pid]=[];
@@ -467,7 +469,9 @@ class GameEngine{
     const map=this.state.territories.map(t=>{
       const a=this.armyAt(t.id);
       const visible=this.visibleArmy(pid,t.id);
-      return {id:t.id,index:t.index,name:t.name,owner:t.owner===pid?'you':t.owner==='__UNASSIGNED__'?'neutral':(t.owner.startsWith('player-')?'player':t.owner),
+      const ownerIsPlayer=t.owner.startsWith('player-');
+      return {id:t.id,index:t.index,name:t.name,owner:t.owner===pid?'you':t.owner==='__UNASSIGNED__'?'neutral':(ownerIsPlayer?'player':t.owner),
+        ownerId:t.owner,ownerName:ownerIsPlayer?(this.player(t.owner)?.name||'Player'):t.owner,
         resource:t.resource,col:t.col,row:t.row,settlement:t.settlement,terrain:t.terrain,population:Math.round(t.population),
         buildings:clone(t.buildings),construction:clone(t.construction),
         army:visible&&!visible.hidden?sumUnits(visible.units||a?.units):0};
@@ -475,7 +479,7 @@ class GameEngine{
     const armies=this.playerArmies(pid).map(clone);
     const events=this.state.events.filter(e=>!e.playerId||e.playerId===pid).slice(0,30);
     return {version:1,revision:this.state.revision,serverTime:Date.now(),mapSeed:this.state.mapSeed,season:this.state.season,tick:this.state.tick,day:this.state.day,hour:this.state.hour,
-      player:clone(p),resources:clone(p.resources),resourceInfo:RESOURCE_INFO,buildings:BUILDINGS,unitTypes:UNIT_TYPES,
+      player:clone(p),resources:clone(p.resources),income:this.resourcePerHour(pid),foodUpkeep:this.foodUpkeep(pid),resourceInfo:RESOURCE_INFO,buildings:BUILDINGS,unitTypes:UNIT_TYPES,
       map,armies,relations:clone(p.relations),events,portals:clone(this.state.portals[pid]||[])};
   }
   action(pid,action,args={}){
