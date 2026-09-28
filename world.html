@@ -3,94 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="0; url=index.html">
 <title>Attrition World</title>
-<style>
-:root{--bg:#0b100c;--panel:#111812;--line:#354236;--text:#edf2ea;--muted:#9ca99e}
-*{box-sizing:border-box}
-html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--text);font:14px system-ui,sans-serif}
-button{font:inherit;color:inherit;background:#18221a;border:1px solid #445246;border-radius:7px;padding:7px 10px;cursor:pointer}
-button:hover{background:#223025}
-.top{height:54px;display:flex;align-items:center;gap:10px;padding:7px 12px;background:#0d130e;border-bottom:1px solid var(--line);position:relative;z-index:10}
-.brand{font-weight:900;letter-spacing:.12em;font-size:18px}.sub{font-size:11px;color:var(--muted)}
-.clock{margin-left:auto;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:#141b15;font-size:12px}
-.layout{height:calc(100% - 54px);display:grid;grid-template-columns:minmax(0,1fr) 300px}
-.map{position:relative;min-width:0;min-height:0;background:#6c815e;overflow:hidden;cursor:grab}.map.dragging{cursor:grabbing}
-.controls{position:absolute;right:12px;top:12px;z-index:4;display:flex;gap:6px}
-.controls button{width:36px}.hint{position:absolute;left:12px;bottom:12px;z-index:4;background:#10170fdd;border:1px solid #526052;border-radius:8px;padding:6px 9px;font-size:11px;pointer-events:none}
-.panel{border-left:1px solid var(--line);background:#101710;padding:12px;overflow:auto}.card{background:#141c15;border:1px solid var(--line);border-radius:9px;padding:10px;margin-bottom:9px}.row{display:flex;justify-content:space-between;gap:8px}.stat{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #273129}.muted{color:var(--muted);font-size:12px}
-.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:7px}.dot{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:4px}
-@media(max-width:820px){.layout{grid-template-columns:1fr}.panel{position:absolute;right:10px;top:64px;bottom:10px;width:min(310px,calc(100% - 20px));z-index:7;border:1px solid var(--line);border-radius:10px;box-shadow:0 20px 50px #0008}.brand{font-size:16px}}
-</style>
 </head>
 <body>
-<header class="top">
-  <div><div class="brand">ATTRITION</div><div class="sub">World</div></div>
-  <div id="clock" class="clock"></div>
-  <button onclick="location.href='index.html'">Base</button>
-</header>
-<div class="layout">
-  <main id="map" class="map">
-    <div class="controls"><button onclick="worldMap.zoomBy(0.88)">−</button><button onclick="worldMap.zoomBy(1.15)">+</button><button onclick="worldMap.home()">Home</button></div>
-    <div class="hint">Drag to pan · scroll to zoom · select territory</div>
-  </main>
-  <aside id="panel" class="panel"></aside>
-</div>
-<script src="map-data.js"></script>
-<script src="world-map.js"></script>
-<script>
-const DEFAULT_STATE={selected:9,world:{},worldArmies:[],claims:3,worldDate:0};
-let state=loadState();
-let worldMap;
-
-function loadState(){
-  try{
-    const saved=JSON.parse(localStorage.getItem('attrition-demo-v2')||localStorage.getItem('attrition-demo')||'null');
-    return Object.assign({},DEFAULT_STATE,saved||{});
-  }catch(_){return {...DEFAULT_STATE}}
-}
-function saveState(){localStorage.setItem('attrition-demo-v2',JSON.stringify(state))}
-function owner(i){return state.world?.[i]?.owner||AttritionMapData.territories[i].owner}
-function adjacent(i){
-  const t=AttritionMapData.territories[i];
-  return AttritionMapData.territories.some((q,j)=>j!==i&&owner(j)==='you'&&Math.abs(q.col-t.col)+Math.abs(q.row-t.row)===1);
-}
-function claim(i){
-  if(owner(i)!=='neutral'||state.claims<=0||!adjacent(i))return;
-  state.world[i]={...(state.world[i]||{}),owner:'you'};
-  state.claims--;
-  saveState();
-  renderPanel();
-  worldMap.refresh();
-}
-function select(i){state.selected=i;saveState();renderPanel();worldMap.refresh()}
-function renderPanel(){
-  const p=AttritionMapData.territories[state.selected];
-  if(!p){document.getElementById('panel').innerHTML='';return}
-  const o=owner(state.selected);
-  const army=(state.worldArmies||[]).find(a=>a.province===state.selected)||p.army;
-  const runtime=state.world?.[state.selected]||{};
-  const settlement=runtime.settlement??p.settlement;
-  document.getElementById('panel').innerHTML=
-    '<div class="card"><div class="row"><b>'+p.name+'</b><span>'+p.resource+'</span></div><div class="stat"><span>Owner</span><b>'+({you:'You',north:'North',south:'South',neutral:'Neutral'}[o]||o)+'</b></div><div class="stat"><span>Settlement</span><b>'+(settlement||'None')+'</b></div><div class="stat"><span>Buildings</span><b>'+p.buildings+'</b></div><div class="stat"><span>Population</span><b>'+p.population.toLocaleString()+'</b></div><div class="stat"><span>Army</span><b>'+(army?army.size.toLocaleString():'None')+'</b></div></div>'+
-    '<div class="card"><div class="row"><b>Control</b><span>Claims '+state.claims+'</span></div>'+(o==='neutral'&&state.claims>0&&adjacent(state.selected)?'<button style="width:100%;margin-top:8px" onclick="claim('+state.selected+')">Claim</button>':'')+'</div>'+
-    '<div class="card"><b>Map</b><div class="legend"><span><i class="dot" style="background:#3f88b0"></i>You</span><span><i class="dot" style="background:#9b5b53"></i>North</span><span><i class="dot" style="background:#775c97"></i>South</span><span><i class="dot" style="background:#707b5c"></i>Neutral</span></div><div class="muted" style="margin-top:9px">Terrain and infrastructure are rendered directly on the map.</div></div>';
-}
-function updateClock(){
-  const mins=state.worldDate||0;
-  const day=Math.floor(mins/1440)+1;
-  const h=String(Math.floor((mins%1440)/60)).padStart(2,'0');
-  const m=String(mins%60).padStart(2,'0');
-  document.getElementById('clock').textContent='Day '+day+' · '+h+':'+m;
-}
-worldMap=new AttritionWorldMap({
-  container:document.getElementById('map'),
-  data:AttritionMapData,
-  getState:()=>state,
-  onSelect:select
-});
-renderPanel();
-updateClock();
-setInterval(updateClock,1000);
-</script>
+<script>location.replace('index.html');</script>
+<noscript><a href="index.html">Open Attrition</a></noscript>
 </body>
 </html>
