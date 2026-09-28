@@ -452,6 +452,9 @@
 
   function improveRelation(faction, amount) {
     if (!(faction in state.relations)) return { ok: false, message: 'Unknown faction.' };
+    const cost = Math.max(5, Math.abs(amount) * 4);
+    if (amount > 0 && state.resources.Gold < cost) return { ok: false, message: 'Not enough Gold.' };
+    if (amount > 0) state.resources.Gold -= cost;
     state.relations[faction] = clamp(state.relations[faction] + amount, -100, 100);
     addEvent('Relations with ' + faction + ' changed to ' + state.relations[faction] + '.');
     save();
@@ -486,6 +489,41 @@
     addEvent('A PvE portal opened.');
     save();
     return { ok: true, message: 'PvE portal opened.' };
+  }
+
+
+  function portalAttack(portalId, portalTerritoryIndex) {
+    const portal = state.portals.find(p => p.id === portalId && p.status === 'open');
+    const node = portal && portal.territories[portalTerritoryIndex];
+    const army = getPlayerArmies().sort((a, b) => armyDisplayPower(b) - armyDisplayPower(a))[0];
+    if (!portal || !node || !army) return { ok: false, message: 'No available army for this portal.' };
+    if (node.owner === 'you') return { ok: false, message: 'That territory is already cleared.' };
+
+    const atkPower = Math.max(1, armyDisplayPower(army));
+    const defPower = unitPower(node.army.units, army.units) * (0.8 + node.army.morale / 250);
+    const ratio = atkPower / Math.max(1, defPower);
+    const atkLoss = Math.max(1, Math.floor(sumUnits(army.units) * clamp(0.025 + (1 / Math.max(1, ratio)) * 0.02, 0.02, 0.09)));
+    removeUnits(army, atkLoss);
+
+    if (ratio >= 1) {
+      node.owner = 'you';
+      node.army = null;
+      portal.defeated += 1;
+      addEvent('Your army cleared portal territory ' + (portalTerritoryIndex + 1) + '.');
+      if (portal.defeated >= portal.territories.length - 1) {
+        Object.entries(portal.reward).forEach(([k, v]) => state.resources[k] = clamp((state.resources[k] || 0) + v, 0, RESOURCE_INFO[k].cap));
+        portal.status = 'cleared';
+        addEvent('Portal cleared. Rewards collected.');
+        portal.reward = {};
+      }
+      save();
+      return { ok: true, message: 'Portal territory cleared.' };
+    }
+
+    node.army.morale = clamp(node.army.morale - 12, 0, 100);
+    addEvent('Your portal attack was repelled.');
+    save();
+    return { ok: true, message: 'Portal attack repelled.' };
   }
 
   function closePortal(id) {
