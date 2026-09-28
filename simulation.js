@@ -191,6 +191,8 @@
       14: { owner: 'south', units: { Militia: 900, Riflemen: 700, AntiTank: 350, FireMage: 150 } },
       20: { owner: 'neutral', units: { Militia: 800, Riflemen: 250, FireMage: 150 } }
     }).forEach(([id, data], n) => {
+      const t = territories[Number(id)];
+      if (!t) return;
       const armyId = 'army-' + n;
       armies[armyId] = {
         id: armyId,
@@ -203,8 +205,7 @@
         morale: 100,
         battleId: null
       };
-      const t = territories[Number(id)];
-      if (t) t.armyId = armyId;
+      t.armyId = armyId;
     });
 
     return {
