@@ -15,7 +15,7 @@ button:active{transform:translateY(1px)}
 #map-viewport.dragging{cursor:grabbing}
 #world{position:absolute;left:0;top:0;width:2200px;height:2200px;transform-origin:0 0;user-select:none;will-change:transform}
 #world-inner{position:absolute;left:0;top:0;width:2200px;height:2200px;transform-origin:0 0;filter:drop-shadow(0 34px 28px rgba(0,0,0,.38));transition:none}
-.tile{cursor:pointer;transition:filter .2s}.tile polygon{stroke:rgba(20,32,23,.55);stroke-width:4;vector-effect:non-scaling-stroke}.tile:hover polygon{filter:brightness(1.12)}.tile.you polygon{fill:rgba(55,135,172,.72);stroke:#8fcfe8}.tile.north polygon{fill:rgba(154,83,77,.66);stroke:#db9c94}.tile.south polygon{fill:rgba(116,83,151,.66);stroke:#cdb5e4}.tile.neutral polygon{fill:rgba(113,124,88,.56);stroke:#aab49d}
+.tile{cursor:pointer;transition:filter .2s}.tile polygon{stroke:rgba(20,32,23,.55);stroke-width:4;vector-effect:non-scaling-stroke}.tile:hover polygon{filter:brightness(1.12)}.tile.you polygon{fill:rgba(55,135,172,.72);stroke:#8fcfe8}.tile.north polygon{fill:rgba(154,83,77,.66);stroke:#db9c94}.tile.south polygon{fill:rgba(116,83,151,.66);stroke:#cdb5e4}.tile.neutral polygon{fill:rgba(113,124,88,.56);stroke:#aab49d}.tile.player polygon{fill:rgba(190,145,69,.62);stroke:#e1c37c}
 .terrain{opacity:.62;pointer-events:none}.tree{fill:#33573d}.tree2{fill:#456e48}.field{stroke:#c4b86e;stroke-width:5;opacity:.5}.hill{fill:#677854}.road{fill:none;stroke:#9b8860;stroke-width:12;opacity:.72;stroke-linecap:round}.river{fill:none;stroke:#4c8ca0;stroke-width:18;opacity:.88;stroke-linecap:round}
 .settlement{pointer-events:none}.building{fill:#bba57d}.roof{fill:#74413a}.fort{fill:#858981;stroke:#6d776d;stroke-width:4}.flag-you{fill:#8fd4eb}.flag-enemy{fill:#e29a8f}
 .resource{font-size:19px;pointer-events:none}.army{font-weight:800;font-size:12px;fill:white;paint-order:stroke;stroke:#17211b;stroke-width:4}
@@ -160,7 +160,7 @@ function makeSvg(){
     '<g clip-path="url(#clip-'+i+')" class="terrain">'+roadSvg(t,cc)+terrainSvg(t,cc)+'</g>'+
     '<g clip-path="url(#clip-'+i+')" class="settlement">'+settlementSvg(t,cc,fort)+'</g>'+
     '<text class="name" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y-92)+'">'+esc(t.name)+'</text>'+
-    '<text class="owner" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y-74)+'">'+(t.owner==='you'?'YOU':t.owner.toUpperCase())+' · '+t.resource+'</text>'+
+    '<text class="owner" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y-74)+'">'+(t.owner==='you'?'YOU':t.owner==='neutral'?'NEUTRAL':(t.ownerName||t.owner).toUpperCase())+' · '+t.resource+'</text>'+
     (t.army?'<text class="army" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y+105)+'">⚑ '+Number(t.army).toLocaleString()+'</text>':'')+
     '<text class="resource" text-anchor="middle" x="'+cc.x+'" y="'+(cc.y+60)+'">'+ICON[t.resource]+'</text></g>';
  }).join('');
@@ -248,7 +248,7 @@ function updateSelection(){
  document.querySelectorAll('.tile.selected').forEach(e=>e.classList.remove('selected'));
  const el=document.querySelector('.tile[data-i="'+selected+'"]');if(el)el.classList.add('selected');
  document.getElementById('sel-name').textContent=t.name;
- document.getElementById('sel-meta').textContent=(t.owner==='you'?'You':t.owner==='neutral'?'Neutral':t.owner)+' · '+t.resource+(t.construction&&t.construction.length?' · Building':'');
+ document.getElementById('sel-meta').textContent=(t.owner==='you'?'You':t.owner==='neutral'?'Neutral':(t.ownerName||'Player'))+' · '+t.resource+(t.construction&&t.construction.length?' · Building':'');
 }
 function buildRadial(){
  const r=document.getElementById('radial');
