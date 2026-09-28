@@ -62,7 +62,8 @@ function serveStatic(req, res, url) {
   let requested = decodeURIComponent(url.pathname);
   if (requested === '/' || requested === '/world.html') requested = '/index.html';
   const file = path.resolve(ROOT, '.' + requested);
-  if (!file.startsWith(ROOT + path.sep) || file.includes(path.sep + '.git' + path.sep)) { res.writeHead(403); return res.end('Forbidden'); }
+  const runtimeDir = path.resolve(DATA_DIR) + path.sep;
+  if (!file.startsWith(ROOT + path.sep) || file.includes(path.sep + '.git' + path.sep) || file.startsWith(path.resolve(__dirname) + path.sep) || file.startsWith(runtimeDir)) { res.writeHead(403); return res.end('Forbidden'); }
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404, {'Content-Type':'text/plain'}); return res.end('Not found'); }
     res.writeHead(200, {'Content-Type':contentType(file),'Cache-Control':'no-cache'});
