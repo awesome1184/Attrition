@@ -85,7 +85,7 @@ function applyView(){
   const viewport=document.getElementById('map-viewport');
   const vw=viewport.clientWidth||window.innerWidth;
   const vh=viewport.clientHeight||window.innerHeight;
-  const pitchDeg=12;
+  const pitchDeg=28;
   const pitch=Math.cos(pitchDeg*Math.PI/180);
   const ax=1,ay=0,az=0,bz=pitch;
   const tx=vw/2-zoom*(ax*camera.x+az*camera.z);
