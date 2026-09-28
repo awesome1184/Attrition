@@ -180,9 +180,11 @@
     const rng = mulberry32(hashSeed(seed));
 
     const start = {
-      col: Math.max(1, Math.min(cols - 2, Math.floor(cols * 0.30))),
-      row: Math.max(1, Math.min(rows - 2, Math.floor(rows * 0.50)))
+      col: 1 + Math.floor(rng() * Math.max(1, cols - 2)),
+      row: Math.floor(rows * 0.35) + Math.floor(rng() * Math.max(1, Math.ceil(rows * 0.30))),
     };
+    start.col = Math.max(1, Math.min(cols - 2, start.col));
+    start.row = Math.max(1, Math.min(rows - 2, start.row));
 
     const territories = [];
     for (let row = 0; row < rows; row++) {
